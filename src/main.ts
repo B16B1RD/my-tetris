@@ -18,21 +18,31 @@ function initCanvas(): HTMLCanvasElement | null {
 }
 
 /**
+ * Get CSS custom property value
+ */
+function getCSSVar(name: string): string {
+  return getComputedStyle(document.documentElement)
+    .getPropertyValue(name)
+    .trim();
+}
+
+/**
  * Draw initial placeholder content
  */
 function drawPlaceholder(ctx: CanvasRenderingContext2D): void {
   const { width, height } = DEFAULT_CONFIG.canvas;
 
+  // Cache CSS variables
+  const bgSecondary = getCSSVar('--bg-secondary');
+  const textPrimary = getCSSVar('--text-primary');
+  const textSecondary = getCSSVar('--text-secondary');
+
   // Clear canvas
-  ctx.fillStyle = getComputedStyle(document.documentElement)
-    .getPropertyValue('--bg-secondary')
-    .trim();
+  ctx.fillStyle = bgSecondary;
   ctx.fillRect(0, 0, width, height);
 
   // Draw title
-  ctx.fillStyle = getComputedStyle(document.documentElement)
-    .getPropertyValue('--text-primary')
-    .trim();
+  ctx.fillStyle = textPrimary;
   ctx.font = 'bold 32px sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -40,9 +50,7 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D): void {
 
   // Draw subtitle
   ctx.font = '16px sans-serif';
-  ctx.fillStyle = getComputedStyle(document.documentElement)
-    .getPropertyValue('--text-secondary')
-    .trim();
+  ctx.fillStyle = textSecondary;
   ctx.fillText('Guideline Edition', width / 2, height / 2);
 
   // Draw instructions

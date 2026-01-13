@@ -56,6 +56,10 @@ body {
     Oxygen,
     Ubuntu,
     Cantarell,
+    'Noto Sans JP',
+    'Hiragino Kaku Gothic ProN',
+    'Hiragino Sans',
+    Meiryo,
     sans-serif;
   background-color: var(--bg-primary);
   color: var(--text-primary);
