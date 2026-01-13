@@ -125,11 +125,12 @@ export class Renderer {
     const y = offsetY + gridY * this.cellSize;
     const size = this.cellSize;
 
+    this.ctx.save();
     this.ctx.strokeStyle = color;
     this.ctx.lineWidth = 2;
     this.ctx.globalAlpha = 0.5;
     this.ctx.strokeRect(x + 1, y + 1, size - 2, size - 2);
-    this.ctx.globalAlpha = 1;
+    this.ctx.restore();
   }
 
   /**
@@ -161,10 +162,28 @@ export class Renderer {
   }
 
   /**
+   * Normalize a hex color to 6-character format.
+   * Converts 3-character hex (#rgb) to 6-character (#rrggbb).
+   * @param color - Hex color string (e.g., "#fff" or "#ffffff")
+   * @returns Normalized 6-character hex color
+   */
+  private normalizeHexColor(color: string): string {
+    const hex = color.replace('#', '');
+    if (hex.length === 3) {
+      return `#${hex[0]}${hex[0]}${hex[1]}${hex[1]}${hex[2]}${hex[2]}`;
+    }
+    return `#${hex}`;
+  }
+
+  /**
    * Lighten a hex color by a percentage.
+   * @param color - Hex color string (supports both 3 and 6 character formats)
+   * @param percent - Percentage to lighten (0-100)
+   * @returns Lightened hex color in 6-character format
    */
   protected lightenColor(color: string, percent: number): string {
-    const num = parseInt(color.replace('#', ''), 16);
+    const normalized = this.normalizeHexColor(color);
+    const num = parseInt(normalized.replace('#', ''), 16);
     const amt = Math.round(2.55 * percent);
     const R = Math.min(255, ((num >> 16) & 0xff) + amt);
     const G = Math.min(255, ((num >> 8) & 0xff) + amt);
@@ -174,9 +193,13 @@ export class Renderer {
 
   /**
    * Darken a hex color by a percentage.
+   * @param color - Hex color string (supports both 3 and 6 character formats)
+   * @param percent - Percentage to darken (0-100)
+   * @returns Darkened hex color in 6-character format
    */
   protected darkenColor(color: string, percent: number): string {
-    const num = parseInt(color.replace('#', ''), 16);
+    const normalized = this.normalizeHexColor(color);
+    const num = parseInt(normalized.replace('#', ''), 16);
     const amt = Math.round(2.55 * percent);
     const R = Math.max(0, ((num >> 16) & 0xff) - amt);
     const G = Math.max(0, ((num >> 8) & 0xff) - amt);

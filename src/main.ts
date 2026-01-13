@@ -6,6 +6,9 @@ import { Randomizer } from './game/Randomizer.ts';
 import { BoardRenderer } from './rendering/BoardRenderer.ts';
 import { GameLoop } from './systems/GameLoop.ts';
 
+/** Font style for FPS counter display */
+const FPS_FONT = '12px monospace';
+
 /**
  * Initialize the game canvas
  */
@@ -136,7 +139,7 @@ function render(state: DemoState): void {
   // Draw FPS counter
   const ctx = state.renderer.getContext();
   ctx.fillStyle = '#888';
-  ctx.font = '12px monospace';
+  ctx.font = FPS_FONT;
   ctx.textAlign = 'right';
   ctx.fillText(`FPS: ${state.gameLoop.fps}`, DEFAULT_CONFIG.canvas.width - 10, 20);
 }

@@ -77,6 +77,20 @@ describe('Board', () => {
       expect(board.setCell(-1, 0, true, '#ff0000')).toBe(false);
       expect(board.setCell(board.width, 0, true, '#ff0000')).toBe(false);
     });
+
+    it('should clear a cell when filled is false', () => {
+      // First fill the cell
+      board.setCell(5, 10, true, '#ff0000');
+      expect(board.getCell(5, 10)?.filled).toBe(true);
+
+      // Now clear it
+      const result = board.setCell(5, 10, false, null);
+      expect(result).toBe(true);
+
+      const cell = board.getCell(5, 10);
+      expect(cell?.filled).toBe(false);
+      expect(cell?.color).toBeNull();
+    });
   });
 
   describe('isInBounds', () => {
@@ -145,6 +159,34 @@ describe('Board', () => {
     it('should return true for placement at left edge', () => {
       const tetromino = new Tetromino('O', { x: 0, y: 4 });
       expect(board.canPlaceTetromino(tetromino)).toBe(true);
+    });
+
+    it('should return true for rotated I-piece at valid position', () => {
+      const tetromino = new Tetromino('I', { x: 5, y: 4 });
+      // Rotate to vertical orientation
+      tetromino.rotateClockwise();
+      expect(board.canPlaceTetromino(tetromino)).toBe(true);
+    });
+
+    it('should return false for rotated I-piece extending past bottom', () => {
+      const tetromino = new Tetromino('I', { x: 5, y: board.totalHeight - 2 });
+      // Rotate to vertical orientation (4 cells tall)
+      tetromino.rotateClockwise();
+      expect(board.canPlaceTetromino(tetromino)).toBe(false);
+    });
+
+    it('should check collision for rotated T-piece', () => {
+      const tetromino = new Tetromino('T', { x: 4, y: 4 });
+      // Rotate to right-facing orientation
+      tetromino.rotateClockwise();
+
+      // Fill a cell that would collide with rotated piece
+      const cells = tetromino.getCells();
+      if (cells[0]) {
+        board.setCell(cells[0].x, cells[0].y, true, '#ff0000');
+      }
+
+      expect(board.canPlaceTetromino(tetromino)).toBe(false);
     });
   });
 
@@ -219,6 +261,28 @@ describe('Board', () => {
 
       // Row 19 should be empty
       expect(board.getCell(5, 19)?.filled).toBe(false);
+    });
+
+    it('should do nothing for negative row index', () => {
+      // Fill a row first
+      board.setCell(5, 10, true, '#ff0000');
+
+      // Try to clear invalid row
+      board.clearRow(-1);
+
+      // Original cell should still be there
+      expect(board.getCell(5, 10)?.filled).toBe(true);
+    });
+
+    it('should do nothing for row index exceeding total height', () => {
+      // Fill a row first
+      board.setCell(5, 10, true, '#ff0000');
+
+      // Try to clear invalid row
+      board.clearRow(board.totalHeight);
+
+      // Original cell should still be there
+      expect(board.getCell(5, 10)?.filled).toBe(true);
     });
   });
 
@@ -320,6 +384,34 @@ describe('Board', () => {
       const grid = board.getFullGrid();
       expect(grid.length).toBe(BOARD_CONFIG.height + BOARD_CONFIG.bufferHeight);
     });
+
+    it('should return a copy of the grid', () => {
+      const grid1 = board.getFullGrid();
+      const grid2 = board.getFullGrid();
+      expect(grid1).not.toBe(grid2);
+      expect(grid1[0]).not.toBe(grid2[0]);
+    });
+
+    it('should not allow modification of internal grid', () => {
+      board.setCell(0, 0, true, '#ff0000');
+      const grid = board.getFullGrid();
+
+      // Verify initial state
+      const firstRow = grid[0];
+      expect(firstRow).toBeDefined();
+      if (firstRow) {
+        expect(firstRow[0]?.filled).toBe(true);
+      }
+
+      // Try to modify the returned grid (should not affect internal state)
+      const cell = grid[0]?.[0];
+      if (cell) {
+        cell.filled = false;
+      }
+
+      // Internal state should be unchanged
+      expect(board.getCell(0, 0)?.filled).toBe(true);
+    });
   });
 
   describe('reset', () => {
@@ -382,6 +474,29 @@ describe('Board', () => {
 
       // Should stop at position just above filled area
       expect(dropPos.y).toBeLessThan(10);
+    });
+
+    it('should handle rotated I-piece drop position', () => {
+      const tetromino = new Tetromino('I', { x: 5, y: 0 });
+      // Rotate to vertical orientation
+      tetromino.rotateClockwise();
+
+      const dropPos = board.getTetrominoDropPosition(tetromino);
+
+      // Should drop to near bottom with vertical orientation
+      expect(dropPos.x).toBe(5);
+      expect(dropPos.y).toBeGreaterThan(0);
+    });
+
+    it('should handle rotated T-piece drop position', () => {
+      const tetromino = new Tetromino('T', { x: 4, y: 0 });
+      // Rotate to different orientation
+      tetromino.rotateClockwise();
+
+      const dropPos = board.getTetrominoDropPosition(tetromino);
+
+      expect(dropPos.x).toBe(4);
+      expect(dropPos.y).toBeGreaterThan(0);
     });
   });
 });

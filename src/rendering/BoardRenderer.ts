@@ -97,28 +97,28 @@ export class BoardRenderer extends Renderer {
 
   /**
    * Draw the grid lines on the board.
+   * Uses a single path for all lines to optimize rendering performance.
    */
   private drawGrid(): void {
     this.ctx.strokeStyle = COLORS.gridLine;
     this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
 
     // Vertical lines
     for (let x = 0; x <= BOARD_CONFIG.width; x++) {
       const lineX = this.boardOffsetX + x * this.cellSize;
-      this.ctx.beginPath();
       this.ctx.moveTo(lineX, this.boardOffsetY);
       this.ctx.lineTo(lineX, this.boardOffsetY + this.boardHeight);
-      this.ctx.stroke();
     }
 
     // Horizontal lines
     for (let y = 0; y <= BOARD_CONFIG.height; y++) {
       const lineY = this.boardOffsetY + y * this.cellSize;
-      this.ctx.beginPath();
       this.ctx.moveTo(this.boardOffsetX, lineY);
       this.ctx.lineTo(this.boardOffsetX + this.boardWidth, lineY);
-      this.ctx.stroke();
     }
+
+    this.ctx.stroke();
   }
 
   /**
