@@ -1,20 +1,12 @@
 {
   "version": "1.0",
   "command": "zen:issue:start",
-  "issue_number": 4,
-  "branch": "feat/issue-4-game-board-and-basic-rendering",
-  "phase": "phase5_implementation",
-  "timestamp": "2026-01-13T12:27:00+09:00",
+  "issue_number": 5,
+  "branch": "feat/issue-5-tetrimino-movement-srs-rotation",
+  "phase": "phase4",
+  "timestamp": "2026-01-13T17:26:00+09:00",
   "context": {
-    "issue_title": "ゲームボードと基本描画",
-    "changed_files": [
-      "src/game/Board.ts",
-      "src/game/Board.test.ts",
-      "src/rendering/Renderer.ts",
-      "src/rendering/BoardRenderer.ts",
-      "src/systems/GameLoop.ts",
-      "src/main.ts"
-    ],
-    "commits": ["0378e16"]
+    "issue_title": "テトリミノ移動・SRS回転システム",
+    "ready_for_implementation": true
   }
 }
