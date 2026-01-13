@@ -74,7 +74,7 @@ export class Randomizer {
   constructor(seed?: number) {
     if (seed !== undefined) {
       const seededRandom = new SeededRandom(seed);
-      this.random = () => seededRandom.next();
+      this.random = (): number => seededRandom.next();
       this.initialSeed = seed;
     } else {
       this.random = Math.random;
@@ -119,7 +119,12 @@ export class Randomizer {
       this.fillPreviewBag();
     }
 
-    return this.bag.shift()!;
+    // bag is guaranteed to have items after the check above
+    const piece = this.bag.shift();
+    if (piece === undefined) {
+      throw new Error('Unexpected empty bag');
+    }
+    return piece;
   }
 
   /**
@@ -152,7 +157,7 @@ export class Randomizer {
   reset(seed?: number): void {
     if (seed !== undefined) {
       const seededRandom = new SeededRandom(seed);
-      this.random = () => seededRandom.next();
+      this.random = (): number => seededRandom.next();
       this.initialSeed = seed;
     } else {
       this.random = Math.random;
