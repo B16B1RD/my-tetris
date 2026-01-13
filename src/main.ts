@@ -17,17 +17,25 @@ function initCanvas(): HTMLCanvasElement | null {
   return canvas;
 }
 
+/** CSS variable cache for performance */
+const cssVarCache: Map<string, string> = new Map();
+
 /**
- * Get CSS custom property value
+ * Get CSS custom property value with caching
  */
 function getCSSVar(name: string): string {
-  return getComputedStyle(document.documentElement)
-    .getPropertyValue(name)
-    .trim();
+  if (!cssVarCache.has(name)) {
+    const value = getComputedStyle(document.documentElement)
+      .getPropertyValue(name)
+      .trim();
+    cssVarCache.set(name, value);
+  }
+  return cssVarCache.get(name)!;
 }
 
 /**
- * Draw initial placeholder content
+ * Draw initial placeholder content.
+ * This is a temporary placeholder that will be replaced with actual game rendering.
  */
 function drawPlaceholder(ctx: CanvasRenderingContext2D): void {
   const { width, height } = DEFAULT_CONFIG.canvas;
@@ -36,6 +44,9 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D): void {
   const bgSecondary = getCSSVar('--bg-secondary');
   const textPrimary = getCSSVar('--text-primary');
   const textSecondary = getCSSVar('--text-secondary');
+  const fontSizeTitle = getCSSVar('--font-size-title');
+  const fontSizeSubtitle = getCSSVar('--font-size-subtitle');
+  const fontSizeBody = getCSSVar('--font-size-body');
 
   // Clear canvas
   ctx.fillStyle = bgSecondary;
@@ -43,18 +54,18 @@ function drawPlaceholder(ctx: CanvasRenderingContext2D): void {
 
   // Draw title
   ctx.fillStyle = textPrimary;
-  ctx.font = 'bold 32px sans-serif';
+  ctx.font = `bold ${fontSizeTitle} sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText('TETRIS', width / 2, height / 2 - 40);
 
   // Draw subtitle
-  ctx.font = '16px sans-serif';
+  ctx.font = `${fontSizeSubtitle} sans-serif`;
   ctx.fillStyle = textSecondary;
   ctx.fillText('Guideline Edition', width / 2, height / 2);
 
   // Draw instructions
-  ctx.font = '14px sans-serif';
+  ctx.font = `${fontSizeBody} sans-serif`;
   ctx.fillText('Press any key to start', width / 2, height / 2 + 60);
 }
 

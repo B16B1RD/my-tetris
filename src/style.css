@@ -27,8 +27,13 @@
   --color-l: #f0a000;
 
   /* Grid */
-  --grid-color: rgba(255, 255, 255, 0.1);
+  --grid-color: rgba(255, 255, 255, 0.15);
   --ghost-opacity: 0.3;
+
+  /* Typography */
+  --font-size-title: 32px;
+  --font-size-subtitle: 16px;
+  --font-size-body: 14px;
 }
 
 /* Dark mode */

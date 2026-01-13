@@ -1,5 +1,6 @@
 {
   "name": "my-tetris",
+  "description": "A Tetris Guideline-compliant game built with TypeScript and Canvas",
   "private": true,
   "version": "0.0.0",
   "type": "module",
