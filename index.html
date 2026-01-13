@@ -11,11 +11,16 @@
       <canvas
         id="game-canvas"
         tabindex="0"
-        role="img"
-        aria-label="テトリスゲーム画面"
+        role="application"
+        aria-label="テトリスゲーム - 矢印キーで操作"
+        aria-describedby="game-instructions"
       >
         お使いのブラウザはCanvas要素に対応していません。
       </canvas>
+      <div id="game-instructions" class="visually-hidden">
+        矢印キーでテトロミノを移動、上キーで回転、スペースキーでハードドロップ
+      </div>
+      <div id="game-announcements" class="visually-hidden" aria-live="polite" aria-atomic="true"></div>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>

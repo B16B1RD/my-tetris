@@ -317,7 +317,12 @@ export class Tetromino {
 
   /** Current shape matrix based on rotation state */
   get shape(): ShapeMatrix {
-    return TETROMINO_DEFS[this.type].shapes[this._rotation];
+    const shapes = TETROMINO_DEFS[this.type].shapes;
+    const shape = shapes[this._rotation];
+    if (!shape) {
+      throw new Error(`Invalid rotation state: ${this._rotation}`);
+    }
+    return shape;
   }
 
   /**
@@ -329,8 +334,10 @@ export class Tetromino {
     const shape = this.shape;
 
     for (let row = 0; row < shape.length; row++) {
-      for (let col = 0; col < shape[row].length; col++) {
-        if (shape[row][col] === 1) {
+      const shapeRow = shape[row];
+      if (!shapeRow) continue;
+      for (let col = 0; col < shapeRow.length; col++) {
+        if (shapeRow[col] === 1) {
           cells.push({
             x: this._position.x + col,
             y: this._position.y + row,
