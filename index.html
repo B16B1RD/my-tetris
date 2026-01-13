@@ -5,11 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Tetris Guideline準拠のテトリスゲーム" />
     <title>Tetris</title>
-    <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="app">
-      <canvas id="game-canvas"></canvas>
+      <canvas
+        id="game-canvas"
+        tabindex="0"
+        role="img"
+        aria-label="テトリスゲーム画面"
+      >
+        お使いのブラウザはCanvas要素に対応していません。
+      </canvas>
     </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
