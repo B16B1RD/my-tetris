@@ -70,9 +70,9 @@ export class InputHandler {
   private readonly arr: number;
   private readonly keyBindings: KeyBindings;
 
-  private readonly keyStates: Map<string, KeyState> = new Map();
-  private readonly keyToAction: Map<string, InputAction> = new Map();
-  private readonly actionCallbacks: Set<InputCallback> = new Set();
+  private readonly keyStates = new Map<string, KeyState>();
+  private readonly keyToAction = new Map<string, InputAction>();
+  private readonly actionCallbacks = new Set<InputCallback>();
 
   private boundKeyDown: ((e: KeyboardEvent) => void) | null = null;
   private boundKeyUp: ((e: KeyboardEvent) => void) | null = null;
