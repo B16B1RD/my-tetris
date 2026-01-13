@@ -14,11 +14,30 @@ import type { Tetromino } from './Tetromino.ts';
 
 /**
  * Represents the game board with cell state management.
+ *
+ * The board consists of a visible area (default 10x20) plus a buffer zone
+ * above it (default 4 rows) where pieces spawn. The buffer zone is used
+ * to detect game over conditions.
+ *
+ * @example
+ * ```typescript
+ * const board = new Board();
+ * const tetromino = new Tetromino('T', { x: 4, y: 0 });
+ *
+ * if (board.canPlaceTetromino(tetromino)) {
+ *   board.lockTetromino(tetromino);
+ *   const cleared = board.clearFilledRows();
+ * }
+ * ```
  */
 export class Board {
   private readonly config: BoardConfig;
   private readonly grid: Cell[][];
 
+  /**
+   * Create a new game board.
+   * @param config - Board configuration (width, height, bufferHeight)
+   */
   constructor(config: BoardConfig = BOARD_CONFIG) {
     this.config = config;
     this.grid = this.createEmptyGrid();
@@ -61,6 +80,8 @@ export class Board {
 
   /**
    * Get a copy of the cell at the specified position.
+   * @param x - Horizontal position (0 = left edge)
+   * @param y - Vertical position (0 = top of buffer zone)
    * @returns Cell data or null if position is out of bounds
    */
   getCell(x: number, y: number): Cell | null {
@@ -80,6 +101,10 @@ export class Board {
 
   /**
    * Set the cell at the specified position.
+   * @param x - Horizontal position (0 = left edge)
+   * @param y - Vertical position (0 = top of buffer zone)
+   * @param filled - Whether the cell is filled
+   * @param color - Cell color (hex string) or null if empty
    * @returns true if successful, false if out of bounds
    */
   setCell(x: number, y: number, filled: boolean, color: string | null): boolean {
@@ -96,6 +121,9 @@ export class Board {
 
   /**
    * Check if a position is within the board bounds.
+   * @param x - Horizontal position to check
+   * @param y - Vertical position to check
+   * @returns true if the position is valid
    */
   isInBounds(x: number, y: number): boolean {
     return (
@@ -117,7 +145,9 @@ export class Board {
 
   /**
    * Check if a tetromino can be placed at its current position.
-   * @returns true if the position is valid
+   * Validates that all cells are within bounds and not overlapping filled cells.
+   * @param tetromino - The tetromino to check
+   * @returns true if the position is valid (no collisions)
    */
   canPlaceTetromino(tetromino: Tetromino): boolean {
     const cells = tetromino.getCells();
@@ -129,7 +159,9 @@ export class Board {
 
   /**
    * Lock a tetromino to the board at its current position.
-   * @returns true if successful
+   * Fills the cells occupied by the tetromino with its color.
+   * @param tetromino - The tetromino to lock
+   * @returns true if successful, false if placement is invalid
    */
   lockTetromino(tetromino: Tetromino): boolean {
     if (!this.canPlaceTetromino(tetromino)) {
@@ -158,7 +190,9 @@ export class Board {
   }
 
   /**
-   * Clear a row and shift all rows above down.
+   * Clear a specific row and shift all rows above it down by one.
+   * A new empty row is added at the top.
+   * @param y - The row index to clear (0 = top of board)
    */
   clearRow(y: number): void {
     if (y < 0 || y >= this.totalHeight) {
@@ -177,7 +211,9 @@ export class Board {
   }
 
   /**
-   * Clear all filled rows and return the number of rows cleared.
+   * Clear all completely filled rows and shift remaining rows down.
+   * Checks from bottom to top to handle consecutive filled rows correctly.
+   * @returns The number of rows cleared (0-4 for standard Tetris scoring)
    */
   clearFilledRows(): number {
     let clearedCount = 0;
@@ -245,8 +281,10 @@ export class Board {
   }
 
   /**
-   * Get a list of positions where a tetromino would occupy.
-   * Used for ghost piece calculation.
+   * Calculate the position where a tetromino would land if dropped.
+   * Used for rendering the ghost piece (drop preview).
+   * @param tetromino - The tetromino to calculate drop position for
+   * @returns The lowest valid position (same x, maximum y)
    */
   getTetrominoDropPosition(tetromino: Tetromino): Position {
     const testPiece = tetromino.clone();

@@ -23,6 +23,16 @@ function initCanvas(): HTMLCanvasElement | null {
 }
 
 /**
+ * Announce game events to screen readers via aria-live region
+ */
+function announce(message: string): void {
+  const announcer = document.getElementById('game-announcements');
+  if (announcer) {
+    announcer.textContent = message;
+  }
+}
+
+/**
  * Simple demo game state
  */
 interface DemoState {
@@ -93,11 +103,13 @@ function update(state: DemoState, deltaTime: number): void {
       const cleared = state.board.clearFilledRows();
       if (cleared > 0) {
         console.log(`Cleared ${cleared} rows!`);
+        announce(`${cleared}ライン消去`);
       }
 
       // Check for game over
       if (state.board.isOverflowing()) {
         console.log('Game Over!');
+        announce('ゲームオーバー');
         state.board.reset();
       }
 

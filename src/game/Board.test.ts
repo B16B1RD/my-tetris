@@ -125,6 +125,27 @@ describe('Board', () => {
       const tetromino = new Tetromino('I', { x: -1, y: 0 });
       expect(board.canPlaceTetromino(tetromino)).toBe(false);
     });
+
+    it('should return false when tetromino extends past right edge', () => {
+      const tetromino = new Tetromino('I', { x: board.width - 1, y: 4 });
+      expect(board.canPlaceTetromino(tetromino)).toBe(false);
+    });
+
+    it('should return false when tetromino extends past bottom', () => {
+      const tetromino = new Tetromino('I', { x: 4, y: board.totalHeight });
+      expect(board.canPlaceTetromino(tetromino)).toBe(false);
+    });
+
+    it('should return true for placement at right edge', () => {
+      // I-piece horizontal at rightmost valid position
+      const tetromino = new Tetromino('I', { x: board.width - 4, y: 4 });
+      expect(board.canPlaceTetromino(tetromino)).toBe(true);
+    });
+
+    it('should return true for placement at left edge', () => {
+      const tetromino = new Tetromino('O', { x: 0, y: 4 });
+      expect(board.canPlaceTetromino(tetromino)).toBe(true);
+    });
   });
 
   describe('lockTetromino', () => {
@@ -223,6 +244,35 @@ describe('Board', () => {
         expect(board.isCellEmpty(x, board.totalHeight - 2)).toBe(true);
       }
     });
+
+    it('should clear tetris (4 consecutive rows)', () => {
+      // Fill bottom 4 rows
+      for (let y = board.totalHeight - 1; y >= board.totalHeight - 4; y--) {
+        for (let x = 0; x < board.width; x++) {
+          board.setCell(x, y, true, '#ff0000');
+        }
+      }
+
+      const cleared = board.clearFilledRows();
+      expect(cleared).toBe(4);
+    });
+
+    it('should clear non-consecutive filled rows', () => {
+      // Fill rows 20 and 22 (skipping 21)
+      for (let x = 0; x < board.width; x++) {
+        board.setCell(x, board.totalHeight - 1, true, '#ff0000'); // row 23
+        board.setCell(x, board.totalHeight - 3, true, '#00ff00'); // row 21
+      }
+      // Leave row 22 partially filled
+      board.setCell(0, board.totalHeight - 2, true, '#0000ff');
+
+      const cleared = board.clearFilledRows();
+      expect(cleared).toBe(2);
+
+      // The partial row should have shifted down
+      expect(board.getCell(0, board.totalHeight - 1)?.filled).toBe(true);
+      expect(board.getCell(0, board.totalHeight - 1)?.color).toBe('#0000ff');
+    });
   });
 
   describe('isOverflowing', () => {
@@ -233,6 +283,18 @@ describe('Board', () => {
     it('should return true when cells are in buffer zone', () => {
       board.setCell(5, 0, true, '#ff0000');
       expect(board.isOverflowing()).toBe(true);
+    });
+
+    it('should return true when any row in buffer zone has cells', () => {
+      // Set cell in last row of buffer zone
+      board.setCell(5, board.bufferHeight - 1, true, '#ff0000');
+      expect(board.isOverflowing()).toBe(true);
+    });
+
+    it('should return false when cells are only in visible area', () => {
+      // Set cell just below buffer zone (first visible row)
+      board.setCell(5, board.bufferHeight, true, '#ff0000');
+      expect(board.isOverflowing()).toBe(false);
     });
   });
 
@@ -298,6 +360,28 @@ describe('Board', () => {
 
       // Should stop above the filled row
       expect(dropPos.y).toBeLessThan(20);
+    });
+
+    it('should preserve original x position', () => {
+      const tetromino = new Tetromino('O', { x: 7, y: 0 });
+      const dropPos = board.getTetrominoDropPosition(tetromino);
+
+      expect(dropPos.x).toBe(7);
+    });
+
+    it('should return current position if tetromino cannot move down', () => {
+      // Fill the entire bottom portion
+      for (let y = 10; y < board.totalHeight; y++) {
+        for (let x = 0; x < board.width; x++) {
+          board.setCell(x, y, true, '#ff0000');
+        }
+      }
+
+      const tetromino = new Tetromino('O', { x: 4, y: 5 });
+      const dropPos = board.getTetrominoDropPosition(tetromino);
+
+      // Should stop at position just above filled area
+      expect(dropPos.y).toBeLessThan(10);
     });
   });
 });
