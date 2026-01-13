@@ -1,0 +1,23 @@
+{
+  "name": "my-tetris",
+  "description": "A Tetris Guideline-compliant game built with TypeScript and Canvas",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.{ts,css,html}\""
+  },
+  "devDependencies": {
+    "typescript": "~5.7.2",
+    "vite": "^6.2.0",
+    "@eslint/js": "^9.21.0",
+    "typescript-eslint": "^8.26.0",
+    "eslint": "^9.21.0",
+    "prettier": "^3.5.3"
+  }
+}

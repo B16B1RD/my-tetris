@@ -1,0 +1,251 @@
+/**
+ * Tetris Game Type Definitions
+ * @module types
+ * @description Core type definitions for a Tetris Guideline-compliant game.
+ * Includes types for tetrominoes, game state, scoring, and configuration.
+ */
+
+/**
+ * The seven standard tetromino types as defined by the Tetris Guideline.
+ * Each letter represents the shape of the piece.
+ */
+export type TetrominoType = 'I' | 'O' | 'T' | 'S' | 'Z' | 'J' | 'L';
+
+/**
+ * Rotation states for tetrominoes.
+ * - 0: Spawn state (initial orientation)
+ * - 1: R (clockwise rotation from spawn)
+ * - 2: 2 (180° rotation from spawn)
+ * - 3: L (counter-clockwise rotation from spawn)
+ */
+export type RotationState = 0 | 1 | 2 | 3;
+
+/**
+ * Represents a position on the game board.
+ * Origin (0,0) is at the top-left corner.
+ */
+export interface Position {
+  /** Horizontal position (column) */
+  x: number;
+  /** Vertical position (row) */
+  y: number;
+}
+
+/**
+ * Represents a single cell on the game board.
+ */
+export interface Cell {
+  /** Whether the cell is occupied by a locked piece */
+  filled: boolean;
+  /** CSS color string or null if empty */
+  color: string | null;
+}
+
+/**
+ * Configuration for the game board dimensions.
+ * Standard Guideline dimensions are 10x20 with 4-row buffer.
+ */
+export interface BoardConfig {
+  /** Board width in cells (standard: 10) */
+  width: number;
+  /** Visible board height in cells (standard: 20) */
+  height: number;
+  /** Hidden buffer rows above visible area (standard: 4) */
+  bufferHeight: number;
+}
+
+/**
+ * 4x4 matrix representing a tetromino shape.
+ * 1 indicates a filled cell, 0 indicates empty.
+ */
+export type ShapeMatrix = readonly (readonly number[])[];
+
+/**
+ * Complete definition of a tetromino piece.
+ */
+export interface TetrominoDef {
+  /** The tetromino type identifier */
+  type: TetrominoType;
+  /** CSS color for rendering */
+  color: string;
+  /** Shape matrices for each rotation state (4 total) */
+  shapes: readonly ShapeMatrix[];
+}
+
+/**
+ * State of the currently active (falling) tetromino.
+ */
+export interface ActiveTetromino {
+  /** The tetromino type */
+  type: TetrominoType;
+  /** Current position on the board */
+  position: Position;
+  /** Current rotation state */
+  rotation: RotationState;
+}
+
+/**
+ * Possible states of the game.
+ */
+export type GameState = 'menu' | 'playing' | 'paused' | 'gameover';
+
+/**
+ * Actions that can trigger score changes.
+ * Includes line clears, T-spins, and drop bonuses.
+ */
+export type ScoreAction =
+  | 'single'
+  | 'double'
+  | 'triple'
+  | 'tetris'
+  | 'tspin'
+  | 'tspin-mini'
+  | 'tspin-single'
+  | 'tspin-double'
+  | 'tspin-triple'
+  | 'softdrop'
+  | 'harddrop';
+
+/**
+ * Current game statistics and scoring state.
+ */
+export interface GameStats {
+  /** Current score */
+  score: number;
+  /** Current level (affects drop speed) */
+  level: number;
+  /** Total lines cleared */
+  lines: number;
+  /** Current combo count */
+  combo: number;
+  /** Whether the last clear was a "difficult" clear (Tetris or T-spin) */
+  backToBack: boolean;
+}
+
+/**
+ * Player input actions.
+ */
+export type InputAction =
+  | 'moveLeft'
+  | 'moveRight'
+  | 'softDrop'
+  | 'hardDrop'
+  | 'rotateClockwise'
+  | 'rotateCounterClockwise'
+  | 'hold'
+  | 'pause';
+
+/**
+ * Mapping of input actions to keyboard keys.
+ * Each action can have multiple key bindings.
+ */
+export type KeyBindings = Record<InputAction, string[]>;
+
+/**
+ * A single event in a replay recording.
+ */
+export interface ReplayEvent {
+  /** Milliseconds since game start */
+  timestamp: number;
+  /** The action that was performed */
+  action: InputAction;
+}
+
+/**
+ * Complete replay data for a game session.
+ */
+export interface ReplayData {
+  /** Random seed for piece generation */
+  seed: number;
+  /** Recorded input events */
+  events: ReplayEvent[];
+  /** Final score achieved */
+  finalScore: number;
+  /** Final level reached */
+  finalLevel: number;
+  /** Total lines cleared */
+  finalLines: number;
+  /** ISO 8601 date string */
+  date: string;
+}
+
+/**
+ * Entry in the high score leaderboard.
+ */
+export interface HighScoreEntry {
+  /** Player name */
+  name: string;
+  /** Score achieved */
+  score: number;
+  /** Level reached */
+  level: number;
+  /** Lines cleared */
+  lines: number;
+  /** ISO 8601 date string */
+  date: string;
+}
+
+/**
+ * Canvas 2D rendering context, nullable for safety checks.
+ */
+export type RenderingContext = CanvasRenderingContext2D | null;
+
+/**
+ * Complete game configuration.
+ */
+export interface GameConfig {
+  /** Canvas and rendering settings */
+  canvas: {
+    /** Canvas width in pixels */
+    width: number;
+    /** Canvas height in pixels */
+    height: number;
+    /** Size of each cell in pixels */
+    cellSize: number;
+  };
+  /** Timing settings for game mechanics */
+  timing: {
+    /** Lock delay in milliseconds before piece locks */
+    lockDelay: number;
+    /** Delayed Auto Shift - initial delay before auto-repeat */
+    das: number;
+    /** Auto Repeat Rate - delay between auto-repeat moves */
+    arr: number;
+  };
+  /** Scoring multipliers */
+  scoring: {
+    /** Points per cell for soft drop */
+    softDropMultiplier: number;
+    /** Points per cell for hard drop */
+    hardDropMultiplier: number;
+  };
+}
+
+/**
+ * Default game configuration following Tetris Guideline.
+ */
+export const DEFAULT_CONFIG: GameConfig = {
+  canvas: {
+    width: 400,
+    height: 600,
+    cellSize: 24,
+  },
+  timing: {
+    lockDelay: 500,
+    das: 170,
+    arr: 50,
+  },
+  scoring: {
+    softDropMultiplier: 1,
+    hardDropMultiplier: 2,
+  },
+};
+
+/**
+ * Standard board configuration per Tetris Guideline.
+ */
+export const BOARD_CONFIG: BoardConfig = {
+  width: 10,
+  height: 20,
+  bufferHeight: 4,
+};
