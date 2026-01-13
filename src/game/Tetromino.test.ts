@@ -120,6 +120,18 @@ describe('Tetromino class', () => {
       tetromino.setRotation(2);
       expect(tetromino.rotation).toBe(2);
     });
+
+    it('should set rotation to boundary values', () => {
+      const tetromino = new Tetromino('T');
+
+      // Test minimum boundary
+      tetromino.setRotation(0);
+      expect(tetromino.rotation).toBe(0);
+
+      // Test maximum boundary
+      tetromino.setRotation(3);
+      expect(tetromino.rotation).toBe(3);
+    });
   });
 
   describe('movement', () => {

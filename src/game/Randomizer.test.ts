@@ -94,14 +94,16 @@ describe('Randomizer', () => {
     });
 
     it('should produce different sequences with different seeds', () => {
+      // Pre-verified seeds that produce different first pieces
       const rng1 = new Randomizer(111);
       const rng2 = new Randomizer(222);
 
       const seq1 = Array.from({ length: 14 }, () => rng1.next());
       const seq2 = Array.from({ length: 14 }, () => rng2.next());
 
-      // Sequences should be different (extremely unlikely to be same)
-      expect(seq1.join('')).not.toBe(seq2.join(''));
+      // Verify at least one difference exists (deterministic check)
+      const hasDifference = seq1.some((piece, i) => piece !== seq2[i]);
+      expect(hasDifference).toBe(true);
     });
 
     it('should return the initial seed', () => {
