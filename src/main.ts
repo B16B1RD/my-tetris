@@ -18,7 +18,7 @@ function initCanvas(): HTMLCanvasElement | null {
 }
 
 /** CSS variable cache for performance */
-const cssVarCache: Map<string, string> = new Map();
+const cssVarCache = new Map<string, string>();
 
 /**
  * Get CSS custom property value with caching
@@ -30,7 +30,12 @@ function getCSSVar(name: string): string {
       .trim();
     cssVarCache.set(name, value);
   }
-  return cssVarCache.get(name)!;
+  // Value is guaranteed to exist after the set above
+  const cachedValue = cssVarCache.get(name);
+  if (cachedValue === undefined) {
+    throw new Error(`CSS variable ${name} not found in cache`);
+  }
+  return cachedValue;
 }
 
 /**
