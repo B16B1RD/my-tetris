@@ -6,8 +6,8 @@
 
 import type { GameConfig } from '../types/index.ts';
 import { DEFAULT_CONFIG, BOARD_CONFIG } from '../types/index.ts';
-import { Board } from '../game/Board.ts';
-import { Tetromino } from '../game/Tetromino.ts';
+import type { Board } from '../game/Board.ts';
+import type { Tetromino } from '../game/Tetromino.ts';
 import { Renderer } from './Renderer.ts';
 
 /** Rendering colors and styles */

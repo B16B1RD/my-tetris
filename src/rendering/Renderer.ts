@@ -75,7 +75,7 @@ export class Renderer {
     width: number,
     height: number,
     strokeColor: string,
-    lineWidth: number = 1
+    lineWidth = 1
   ): void {
     this.ctx.strokeStyle = strokeColor;
     this.ctx.lineWidth = lineWidth;
@@ -89,8 +89,8 @@ export class Renderer {
     gridX: number,
     gridY: number,
     color: string,
-    offsetX: number = 0,
-    offsetY: number = 0
+    offsetX = 0,
+    offsetY = 0
   ): void {
     const x = offsetX + gridX * this.cellSize;
     const y = offsetY + gridY * this.cellSize;
@@ -118,8 +118,8 @@ export class Renderer {
     gridX: number,
     gridY: number,
     color: string,
-    offsetX: number = 0,
-    offsetY: number = 0
+    offsetX = 0,
+    offsetY = 0
   ): void {
     const x = offsetX + gridX * this.cellSize;
     const y = offsetY + gridY * this.cellSize;

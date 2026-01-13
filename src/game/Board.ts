@@ -10,7 +10,7 @@ import type {
   Position,
 } from '../types/index.ts';
 import { BOARD_CONFIG } from '../types/index.ts';
-import { Tetromino } from './Tetromino.ts';
+import type { Tetromino } from './Tetromino.ts';
 
 /**
  * Represents the game board with cell state management.

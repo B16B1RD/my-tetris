@@ -31,16 +31,16 @@ export class GameLoop {
   private renderCallback: RenderCallback | null = null;
 
   private animationFrameId: number | null = null;
-  private lastTime: number = 0;
-  private accumulator: number = 0;
-  private isRunning: boolean = false;
+  private lastTime = 0;
+  private accumulator = 0;
+  private isRunning = false;
 
   // Performance metrics
-  private frameCount: number = 0;
-  private lastFPSUpdate: number = 0;
-  private currentFPS: number = 0;
-  private currentUPS: number = 0;
-  private updateCount: number = 0;
+  private frameCount = 0;
+  private lastFPSUpdate = 0;
+  private currentFPS = 0;
+  private currentUPS = 0;
+  private updateCount = 0;
 
   constructor(config: GameLoopConfig = {}) {
     const { targetUPS = 60, maxUpdatesPerFrame = 5 } = config;
