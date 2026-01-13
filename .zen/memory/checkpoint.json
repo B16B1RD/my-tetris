@@ -1,0 +1,20 @@
+{
+  "version": "1.0",
+  "command": "zen:issue:start",
+  "issue_number": 4,
+  "branch": "feat/issue-4-game-board-and-basic-rendering",
+  "phase": "phase3",
+  "timestamp": "2026-01-13T12:05:00+09:00",
+  "context": {
+    "issue_title": "ゲームボードと基本描画",
+    "plan_approved": true,
+    "target_files": [
+      "src/game/Board.ts",
+      "src/rendering/Renderer.ts",
+      "src/rendering/BoardRenderer.ts",
+      "src/systems/GameLoop.ts",
+      "src/main.ts",
+      "src/game/Board.test.ts"
+    ]
+  }
+}

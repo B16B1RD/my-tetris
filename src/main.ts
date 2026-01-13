@@ -1,5 +1,10 @@
 import './style.css';
 import { DEFAULT_CONFIG } from './types/index.ts';
+import { Board } from './game/Board.ts';
+import { Tetromino } from './game/Tetromino.ts';
+import { Randomizer } from './game/Randomizer.ts';
+import { BoardRenderer } from './rendering/BoardRenderer.ts';
+import { GameLoop } from './systems/GameLoop.ts';
 
 /**
  * Initialize the game canvas
@@ -17,61 +22,111 @@ function initCanvas(): HTMLCanvasElement | null {
   return canvas;
 }
 
-/** CSS variable cache for performance */
-const cssVarCache = new Map<string, string>();
-
 /**
- * Get CSS custom property value with caching
+ * Simple demo game state
  */
-function getCSSVar(name: string): string {
-  if (!cssVarCache.has(name)) {
-    const value = getComputedStyle(document.documentElement)
-      .getPropertyValue(name)
-      .trim();
-    cssVarCache.set(name, value);
-  }
-  // Value is guaranteed to exist after the set above
-  const cachedValue = cssVarCache.get(name);
-  if (cachedValue === undefined) {
-    throw new Error(`CSS variable ${name} not found in cache`);
-  }
-  return cachedValue;
+interface DemoState {
+  board: Board;
+  renderer: BoardRenderer;
+  gameLoop: GameLoop;
+  randomizer: Randomizer;
+  currentTetromino: Tetromino | null;
+  dropTimer: number;
+  dropInterval: number;
 }
 
 /**
- * Draw initial placeholder content.
- * This is a temporary placeholder that will be replaced with actual game rendering.
+ * Initialize demo state
  */
-function drawPlaceholder(ctx: CanvasRenderingContext2D): void {
-  const { width, height } = DEFAULT_CONFIG.canvas;
+function initDemo(canvas: HTMLCanvasElement): DemoState {
+  const board = new Board();
+  const renderer = new BoardRenderer(canvas);
+  const gameLoop = new GameLoop();
+  const randomizer = new Randomizer();
 
-  // Cache CSS variables
-  const bgSecondary = getCSSVar('--bg-secondary');
-  const textPrimary = getCSSVar('--text-primary');
-  const textSecondary = getCSSVar('--text-secondary');
-  const fontSizeTitle = getCSSVar('--font-size-title');
-  const fontSizeSubtitle = getCSSVar('--font-size-subtitle');
-  const fontSizeBody = getCSSVar('--font-size-body');
+  return {
+    board,
+    renderer,
+    gameLoop,
+    randomizer,
+    currentTetromino: null,
+    dropTimer: 0,
+    dropInterval: 1000, // 1 second per drop
+  };
+}
 
-  // Clear canvas
-  ctx.fillStyle = bgSecondary;
-  ctx.fillRect(0, 0, width, height);
+/**
+ * Spawn a new tetromino
+ */
+function spawnTetromino(state: DemoState): void {
+  const type = state.randomizer.next();
+  state.currentTetromino = new Tetromino(type, { x: 3, y: 0 });
+  state.dropTimer = 0;
+}
 
-  // Draw title
-  ctx.fillStyle = textPrimary;
-  ctx.font = `bold ${fontSizeTitle} sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('TETRIS', width / 2, height / 2 - 40);
+/**
+ * Update game logic
+ */
+function update(state: DemoState, deltaTime: number): void {
+  // Spawn first tetromino if needed
+  if (!state.currentTetromino) {
+    spawnTetromino(state);
+    return;
+  }
 
-  // Draw subtitle
-  ctx.font = `${fontSizeSubtitle} sans-serif`;
-  ctx.fillStyle = textSecondary;
-  ctx.fillText('Guideline Edition', width / 2, height / 2);
+  // Update drop timer
+  state.dropTimer += deltaTime;
 
-  // Draw instructions
-  ctx.font = `${fontSizeBody} sans-serif`;
-  ctx.fillText('Press any key to start', width / 2, height / 2 + 60);
+  // Drop tetromino when timer exceeds interval
+  if (state.dropTimer >= state.dropInterval) {
+    state.dropTimer = 0;
+
+    // Try to move down
+    state.currentTetromino.move(0, 1);
+
+    if (!state.board.canPlaceTetromino(state.currentTetromino)) {
+      // Can't move down, revert and lock
+      state.currentTetromino.move(0, -1);
+      state.board.lockTetromino(state.currentTetromino);
+
+      // Clear filled rows
+      const cleared = state.board.clearFilledRows();
+      if (cleared > 0) {
+        console.log(`Cleared ${cleared} rows!`);
+      }
+
+      // Check for game over
+      if (state.board.isOverflowing()) {
+        console.log('Game Over!');
+        state.board.reset();
+      }
+
+      // Spawn new tetromino
+      spawnTetromino(state);
+    }
+  }
+}
+
+/**
+ * Render the game
+ */
+function render(state: DemoState): void {
+  const ghostPosition = state.currentTetromino
+    ? state.board.getTetrominoDropPosition(state.currentTetromino)
+    : undefined;
+
+  state.renderer.render(
+    state.board,
+    state.currentTetromino ?? undefined,
+    ghostPosition
+  );
+
+  // Draw FPS counter
+  const ctx = state.renderer.getContext();
+  ctx.fillStyle = '#888';
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'right';
+  ctx.fillText(`FPS: ${state.gameLoop.fps}`, DEFAULT_CONFIG.canvas.width - 10, 20);
 }
 
 /**
@@ -81,13 +136,14 @@ function main(): void {
   const canvas = initCanvas();
   if (!canvas) return;
 
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    console.error('Failed to get 2D context');
-    return;
-  }
+  const state = initDemo(canvas);
 
-  drawPlaceholder(ctx);
+  // Set up game loop callbacks
+  state.gameLoop.setUpdateCallback((deltaTime) => update(state, deltaTime));
+  state.gameLoop.setRenderCallback(() => render(state));
+
+  // Start the game loop
+  state.gameLoop.start();
 
   console.log('Tetris initialized successfully');
 }

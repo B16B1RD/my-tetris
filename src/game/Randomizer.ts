@@ -17,7 +17,9 @@ import { ALL_TETROMINO_TYPES } from './Tetromino.ts';
 function shuffle<T>(array: T[], random: () => number = Math.random): T[] {
   for (let i = array.length - 1; i > 0; i--) {
     const j = Math.floor(random() * (i + 1));
-    [array[i], array[j]] = [array[j], array[i]];
+    const temp = array[i];
+    array[i] = array[j] as T;
+    array[j] = temp as T;
   }
   return array;
 }
@@ -138,13 +140,19 @@ export class Randomizer {
 
     // Add from current bag
     for (let i = 0; i < Math.min(maxPeek, this.bag.length); i++) {
-      result.push(this.bag[i]);
+      const piece = this.bag[i];
+      if (piece !== undefined) {
+        result.push(piece);
+      }
     }
 
     // Add from preview bag if needed
     const remaining = maxPeek - result.length;
     for (let i = 0; i < Math.min(remaining, this.previewBag.length); i++) {
-      result.push(this.previewBag[i]);
+      const piece = this.previewBag[i];
+      if (piece !== undefined) {
+        result.push(piece);
+      }
     }
 
     return result;
