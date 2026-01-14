@@ -30,12 +30,46 @@ export class Storage {
       if (!data) {
         return [];
       }
-      const scores: HighScoreEntry[] = JSON.parse(data);
+      const parsed: unknown = JSON.parse(data);
+      const scores = this.validateScores(parsed);
       return this.sortScores(scores);
     } catch {
       // Return empty array if parsing fails
       return [];
     }
+  }
+
+  /**
+   * Validate that parsed data is a valid array of HighScoreEntry.
+   * Filters out invalid entries.
+   */
+  private validateScores(data: unknown): HighScoreEntry[] {
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return data.filter((entry): entry is HighScoreEntry => this.isValidEntry(entry));
+  }
+
+  /**
+   * Type guard to check if an object is a valid HighScoreEntry.
+   */
+  private isValidEntry(entry: unknown): entry is HighScoreEntry {
+    if (typeof entry !== 'object' || entry === null) {
+      return false;
+    }
+    const obj = entry as Record<string, unknown>;
+    return (
+      typeof obj.name === 'string' &&
+      typeof obj.score === 'number' &&
+      typeof obj.level === 'number' &&
+      typeof obj.lines === 'number' &&
+      typeof obj.date === 'string' &&
+      obj.name.length > 0 &&
+      obj.name.length <= 10 &&
+      Number.isFinite(obj.score) &&
+      Number.isFinite(obj.level) &&
+      Number.isFinite(obj.lines)
+    );
   }
 
   /**
@@ -101,10 +135,10 @@ export class Storage {
 
   /**
    * Create a high score entry from game stats.
-   * @param name - Player name
-   * @param score - Final score
-   * @param level - Final level
-   * @param lines - Total lines cleared
+   * @param name - Player name (A-Z only, max 10 chars)
+   * @param score - Final score (non-negative)
+   * @param level - Final level (positive)
+   * @param lines - Total lines cleared (non-negative)
    * @returns A new HighScoreEntry
    */
   createEntry(
@@ -113,11 +147,22 @@ export class Storage {
     level: number,
     lines: number
   ): HighScoreEntry {
+    // Sanitize name: uppercase A-Z only, max 10 chars
+    const sanitizedName = name
+      .toUpperCase()
+      .replace(/[^A-Z]/g, '')
+      .slice(0, 10) || DEFAULT_PLAYER_NAME;
+
+    // Ensure numeric values are valid
+    const safeScore = Math.max(0, Math.floor(score) || 0);
+    const safeLevel = Math.max(1, Math.floor(level) || 1);
+    const safeLines = Math.max(0, Math.floor(lines) || 0);
+
     return {
-      name: name || DEFAULT_PLAYER_NAME,
-      score,
-      level,
-      lines,
+      name: sanitizedName,
+      score: safeScore,
+      level: safeLevel,
+      lines: safeLines,
       date: new Date().toISOString(),
     };
   }

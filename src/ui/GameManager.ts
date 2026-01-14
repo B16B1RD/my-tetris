@@ -25,6 +25,7 @@ import { BoardRenderer } from '../rendering/BoardRenderer.ts';
 import { UIRenderer } from '../rendering/UIRenderer.ts';
 import { GameLoop } from '../systems/GameLoop.ts';
 import { InputHandler } from '../systems/InputHandler.ts';
+import type { Storage } from '../storage/Storage.ts';
 import { getStorage } from '../storage/Storage.ts';
 
 /** Font style for FPS counter display */
@@ -76,6 +77,7 @@ export class GameManager {
   private readonly uiRenderer: UIRenderer;
   private readonly gameLoop: GameLoop;
   private readonly inputHandler: InputHandler;
+  private readonly storage: Storage;
   private readonly announcer: HTMLElement | null;
 
   private state: GameState = 'menu';
@@ -114,6 +116,7 @@ export class GameManager {
     );
     this.gameLoop = new GameLoop();
     this.inputHandler = new InputHandler();
+    this.storage = getStorage();
     this.announcer = document.getElementById('game-announcements');
 
     // Bind event handlers for later cleanup
@@ -446,17 +449,16 @@ export class GameManager {
    * Submit the high score with entered name.
    */
   private submitHighScore(): void {
-    const storage = getStorage();
-    const entry = storage.createEntry(
+    const entry = this.storage.createEntry(
       this.nameInputValue,
       this.nameInputScore,
       this.nameInputLevel,
       this.nameInputLines
     );
-    storage.addHighScore(entry);
+    this.storage.addHighScore(entry);
 
     // Find the index of the new entry in the sorted list
-    const scores = storage.getHighScores();
+    const scores = this.storage.getHighScores();
     this.rankingHighlightIndex = scores.findIndex(
       (s) =>
         s.name === entry.name &&
@@ -482,10 +484,9 @@ export class GameManager {
       return;
     }
 
-    const storage = getStorage();
-    if (storage.isHighScore(stats.score)) {
+    if (this.storage.isHighScore(stats.score)) {
       // New high score! Show name input screen
-      const rank = storage.getScoreRank(stats.score);
+      const rank = this.storage.getScoreRank(stats.score);
       this.nameInputScore = stats.score;
       this.nameInputLevel = stats.level;
       this.nameInputLines = stats.lines;
@@ -844,7 +845,7 @@ export class GameManager {
 
       case 'ranking':
         this.uiRenderer.renderRanking(
-          getStorage().getHighScores(),
+          this.storage.getHighScores(),
           this.rankingHighlightIndex
         );
         break;
