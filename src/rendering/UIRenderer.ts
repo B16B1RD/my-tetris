@@ -253,7 +253,7 @@ export class UIRenderer {
    * @param scores - Array of high score entries
    * @param highlightIndex - Index to highlight as new entry (-1 for none)
    */
-  renderRanking(scores: HighScoreEntry[], highlightIndex: number = -1): void {
+  renderRanking(scores: HighScoreEntry[], highlightIndex = -1): void {
     this.drawOverlayBackground();
 
     // Title
@@ -328,7 +328,7 @@ export class UIRenderer {
     score: number,
     rank: number,
     currentName: string,
-    showCursor: boolean = true
+    showCursor = true
   ): void {
     this.drawOverlayBackground();
 

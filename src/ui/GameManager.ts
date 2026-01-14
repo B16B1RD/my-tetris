@@ -13,7 +13,6 @@ import type {
   InputAction,
   LineClearResult,
   GameStats,
-  HighScoreEntry,
 } from '../types/index.ts';
 import { DEFAULT_CONFIG } from '../types/index.ts';
 import { Board } from '../game/Board.ts';
