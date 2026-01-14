@@ -67,9 +67,9 @@ const T_CORNERS: Record<RotationState, { front: Position[]; back: Position[] }> 
     back: [{ x: -1, y: -1 }, { x: 1, y: -1 }],
   },
   // State 3: T points left (L)
-  //   [ ][*]   <- corners at (-1, -1) and (0, -1)
-  //     [*][T] <- center is at (1, 1) relative to piece position
-  //   [ ][*]   <- corners at (-1, 1) and (0, 1)
+  //   [*][ ]   <- back corner at (1, -1), front corner at (-1, -1)
+  // [T][*]     <- center is at (1, 1) relative to piece position
+  //   [*][ ]   <- back corner at (1, 1), front corner at (-1, 1)
   3: {
     front: [{ x: -1, y: -1 }, { x: -1, y: 1 }],
     back: [{ x: 1, y: -1 }, { x: 1, y: 1 }],

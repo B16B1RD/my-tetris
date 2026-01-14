@@ -57,7 +57,12 @@ interface DemoState {
   isGrounded: boolean;
   /** Whether the last action was a rotation (for T-Spin detection) */
   lastActionWasRotation: boolean;
-  /** Wall kick index from the last successful rotation */
+  /**
+   * Wall kick index from the last successful rotation.
+   * 0 = no wall kick (rotation succeeded at original position)
+   * 1-3 = wall kick tests 1-3 (standard SRS kicks)
+   * 4+ = wall kick test 4+ (triggers T-Spin Mini per Tetris Guideline)
+   */
   lastKickIndex: number;
 }
 
