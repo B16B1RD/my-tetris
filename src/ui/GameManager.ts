@@ -802,7 +802,8 @@ export class GameManager {
     if (this.state === 'name-input') {
       this.nameInput.cursorBlinkTimer += deltaTime;
       if (this.nameInput.cursorBlinkTimer >= 500) {
-        this.nameInput.cursorBlinkTimer = 0;
+        // Use modulo to preserve any accumulated overflow for accurate timing
+        this.nameInput.cursorBlinkTimer %= 500;
         this.nameInput.showCursor = !this.nameInput.showCursor;
       }
     }
