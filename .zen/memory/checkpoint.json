@@ -1,13 +1,12 @@
 {
   "version": "1.0",
   "command": "zen:issue:start",
-  "issue_number": 7,
-  "branch": "feat/issue-7-score-level-system",
-  "phase": "phase5_review",
-  "timestamp": "2026-01-15T12:45:00+09:00",
+  "issue_number": 9,
+  "branch": "feat/issue-9-game-ui-menu-pause-gameover",
+  "phase": "phase4",
+  "timestamp": "2026-01-15T12:20:00+09:00",
   "context": {
-    "issue_title": "スコア・レベルシステム",
-    "pr_number": 19,
-    "review_result": "mergeable"
+    "issue_title": "ゲームUI（メニュー・ポーズ・ゲームオーバー）",
+    "ready_for_implementation": true
   }
 }

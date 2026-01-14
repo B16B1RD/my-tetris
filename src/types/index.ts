@@ -90,6 +90,61 @@ export interface ActiveTetromino {
 export type GameState = 'menu' | 'playing' | 'paused' | 'gameover';
 
 /**
+ * Menu item options for navigation.
+ */
+export interface MenuItem {
+  /** Display label for the menu item */
+  label: string;
+  /** Action identifier */
+  action: string;
+  /** Whether this item is currently selected */
+  selected?: boolean;
+}
+
+/**
+ * Configuration for UI overlay rendering.
+ */
+export interface UIOverlayConfig {
+  /** Background color with alpha (e.g., 'rgba(0, 0, 0, 0.8)') */
+  backgroundColor: string;
+  /** Text color for titles */
+  titleColor: string;
+  /** Text color for menu items */
+  textColor: string;
+  /** Highlight color for selected items */
+  highlightColor: string;
+  /** Font family for text */
+  fontFamily: string;
+}
+
+/**
+ * Default UI overlay configuration.
+ */
+export const DEFAULT_UI_CONFIG: UIOverlayConfig = {
+  backgroundColor: 'rgba(0, 0, 0, 0.85)',
+  titleColor: '#ffffff',
+  textColor: '#cccccc',
+  highlightColor: '#00ffff',
+  fontFamily: 'sans-serif',
+};
+
+/**
+ * Screen transition state for animations.
+ */
+export interface TransitionState {
+  /** Whether a transition is currently active */
+  active: boolean;
+  /** Type of transition (fade-in, fade-out) */
+  type: 'fade-in' | 'fade-out';
+  /** Progress of the transition (0 to 1) */
+  progress: number;
+  /** Duration of the transition in milliseconds */
+  duration: number;
+  /** Callback to execute when transition completes */
+  onComplete?: () => void;
+}
+
+/**
  * Actions that can trigger score changes.
  * Includes line clears, T-spins, and drop bonuses.
  */

@@ -4,7 +4,7 @@
  * @description Renders the game board, grid, and locked pieces.
  */
 
-import type { GameConfig, TetrominoType } from '../types/index.ts';
+import type { GameConfig, TetrominoType, GameStats } from '../types/index.ts';
 import { DEFAULT_CONFIG, BOARD_CONFIG } from '../types/index.ts';
 import type { Board } from '../game/Board.ts';
 import type { Tetromino } from '../game/Tetromino.ts';
@@ -384,5 +384,63 @@ export class BoardRenderer extends Renderer {
     this.ctx.fillStyle = this.darkenColor(color, 30);
     this.ctx.fillRect(x, y + size - 1, size, 1);
     this.ctx.fillRect(x + size - 1, y, 1, size);
+  }
+
+  /**
+   * Render the score panel showing current game stats.
+   * @param stats - Current game statistics
+   */
+  renderScorePanel(stats: GameStats): void {
+    const panelWidth = PANEL_CONFIG.panelWidthCells * PANEL_CONFIG.previewCellSize;
+    const panelHeight = 120;
+    const panelX = this.boardOffsetX - panelWidth - PANEL_CONFIG.panelMargin;
+    // Position below the Hold panel
+    const holdPanelHeight = PANEL_CONFIG.previewItemHeight * PANEL_CONFIG.previewCellSize + PANEL_CONFIG.labelAreaHeight;
+    const panelY = this.boardOffsetY + holdPanelHeight + PANEL_CONFIG.panelMargin;
+
+    // Draw panel background
+    this.ctx.fillStyle = COLORS.panelBackground;
+    this.ctx.fillRect(panelX, panelY, panelWidth, panelHeight);
+
+    // Draw panel border
+    this.ctx.strokeStyle = COLORS.panelBorder;
+    this.ctx.lineWidth = 1;
+    this.ctx.strokeRect(panelX, panelY, panelWidth, panelHeight);
+
+    // Draw stats
+    this.ctx.fillStyle = COLORS.labelText;
+    this.ctx.font = PANEL_CONFIG.labelFont;
+    this.ctx.textAlign = 'left';
+
+    const textX = panelX + 8;
+    let textY = panelY + 20;
+    const lineHeight = 22;
+
+    // Score
+    this.ctx.fillText('SCORE', textX, textY);
+    textY += 14;
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = 'bold 14px monospace';
+    this.ctx.fillText(stats.score.toLocaleString(), textX, textY);
+
+    // Level
+    textY += lineHeight;
+    this.ctx.fillStyle = COLORS.labelText;
+    this.ctx.font = PANEL_CONFIG.labelFont;
+    this.ctx.fillText('LEVEL', textX, textY);
+    textY += 14;
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = 'bold 14px monospace';
+    this.ctx.fillText(String(stats.level), textX, textY);
+
+    // Lines
+    textY += lineHeight;
+    this.ctx.fillStyle = COLORS.labelText;
+    this.ctx.font = PANEL_CONFIG.labelFont;
+    this.ctx.fillText('LINES', textX, textY);
+    textY += 14;
+    this.ctx.fillStyle = '#ffffff';
+    this.ctx.font = 'bold 14px monospace';
+    this.ctx.fillText(String(stats.lines), textX, textY);
   }
 }
