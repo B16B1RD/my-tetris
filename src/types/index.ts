@@ -190,6 +190,16 @@ export interface ReplayData {
 }
 
 /**
+ * Hold state for the Hold queue feature.
+ */
+export interface HoldState {
+  /** The held tetromino type (null if empty) */
+  heldPiece: TetrominoType | null;
+  /** Whether hold has been used this turn (reset on piece lock) */
+  holdUsed: boolean;
+}
+
+/**
  * Entry in the high score leaderboard.
  */
 export interface HighScoreEntry {

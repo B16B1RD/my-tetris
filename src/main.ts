@@ -1,5 +1,5 @@
 import './style.css';
-import type { InputAction, LineClearResult } from './types/index.ts';
+import type { InputAction, LineClearResult, TetrominoType, HoldState } from './types/index.ts';
 import { DEFAULT_CONFIG } from './types/index.ts';
 import { Board } from './game/Board.ts';
 import { Tetromino } from './game/Tetromino.ts';
@@ -64,6 +64,8 @@ interface DemoState {
    * 4+ = wall kick test 4+ (triggers T-Spin Mini per Tetris Guideline)
    */
   lastKickIndex: number;
+  /** Hold queue state */
+  hold: HoldState;
 }
 
 /**
@@ -89,6 +91,10 @@ function initDemo(canvas: HTMLCanvasElement): DemoState {
     isGrounded: false,
     lastActionWasRotation: false,
     lastKickIndex: 0,
+    hold: {
+      heldPiece: null,
+      holdUsed: false,
+    },
   };
 }
 
@@ -97,6 +103,19 @@ function initDemo(canvas: HTMLCanvasElement): DemoState {
  */
 function spawnTetromino(state: DemoState): void {
   const type = state.randomizer.next();
+  state.currentTetromino = new Tetromino(type, { x: 3, y: 0 });
+  state.dropTimer = 0;
+  state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
+  state.isGrounded = false;
+  state.lastActionWasRotation = false;
+  state.lastKickIndex = 0;
+  state.hold.holdUsed = false; // Reset hold availability on new piece
+}
+
+/**
+ * Spawn a tetromino of a specific type (used for hold swap)
+ */
+function spawnTetrominoOfType(state: DemoState, type: TetrominoType): void {
   state.currentTetromino = new Tetromino(type, { x: 3, y: 0 });
   state.dropTimer = 0;
   state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
@@ -237,6 +256,33 @@ function handleRotation(
 }
 
 /**
+ * Perform hold operation
+ * Swaps the current piece with the held piece (or stores if empty)
+ */
+function performHold(state: DemoState): void {
+  if (!state.currentTetromino) return;
+
+  // Can only hold once per piece drop
+  if (state.hold.holdUsed) return;
+
+  const currentType = state.currentTetromino.type;
+
+  if (state.hold.heldPiece === null) {
+    // First hold: store current piece and spawn new one
+    state.hold.heldPiece = currentType;
+    spawnTetromino(state);
+  } else {
+    // Swap: store current piece and spawn held piece
+    const heldType = state.hold.heldPiece;
+    state.hold.heldPiece = currentType;
+    spawnTetrominoOfType(state, heldType);
+  }
+
+  state.hold.holdUsed = true;
+  announce('Hold');
+}
+
+/**
  * Handle input actions
  */
 function handleInput(state: DemoState, action: InputAction): void {
@@ -271,7 +317,7 @@ function handleInput(state: DemoState, action: InputAction): void {
       break;
 
     case 'hold':
-      // Hold functionality not implemented yet
+      performHold(state);
       break;
 
     case 'pause':
@@ -333,6 +379,13 @@ function render(state: DemoState): void {
     state.currentTetromino ?? undefined,
     ghostPosition
   );
+
+  // Render NEXT panel (show next 6 pieces)
+  const nextPieces = state.randomizer.peek(6);
+  state.renderer.renderNextPanel(nextPieces);
+
+  // Render Hold panel
+  state.renderer.renderHoldPanel(state.hold.heldPiece, state.hold.holdUsed);
 
   // Draw FPS counter
   const ctx = state.renderer.getContext();
