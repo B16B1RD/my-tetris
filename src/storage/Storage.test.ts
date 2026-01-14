@@ -66,6 +66,8 @@ describe('Storage', () => {
 
     it('should return false for zero or negative scores', () => {
       expect(storage.isHighScore(0)).toBe(false);
+      expect(storage.isHighScore(-1)).toBe(false);
+      expect(storage.isHighScore(-100)).toBe(false);
     });
 
     it('should return true if score beats lowest when list is full', () => {
@@ -76,6 +78,14 @@ describe('Storage', () => {
       expect(storage.isHighScore(1500)).toBe(true);
       // Score of 500 should not qualify
       expect(storage.isHighScore(500)).toBe(false);
+    });
+
+    it('should return false for score equal to lowest when list is full', () => {
+      for (let i = 0; i < 10; i++) {
+        storage.addHighScore(createTestEntry(String.fromCharCode(65 + i), (i + 1) * 1000));
+      }
+      // Lowest is 1000, so exactly 1000 should not qualify (must beat, not tie)
+      expect(storage.isHighScore(1000)).toBe(false);
     });
 
     it('should return true if list is not full', () => {
@@ -107,6 +117,17 @@ describe('Storage', () => {
       }
       // 500 is below lowest (1000)
       expect(storage.getScoreRank(500)).toBe(null);
+    });
+
+    it('should return next rank for tied scores', () => {
+      storage.addHighScore(createTestEntry('AAA', 3000));
+      storage.addHighScore(createTestEntry('BBB', 2000));
+      storage.addHighScore(createTestEntry('CCC', 1000));
+
+      // Score equal to existing score should rank after it (must beat, not tie)
+      expect(storage.getScoreRank(3000)).toBe(2);
+      expect(storage.getScoreRank(2000)).toBe(3);
+      expect(storage.getScoreRank(1000)).toBe(4);
     });
   });
 
