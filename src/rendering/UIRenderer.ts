@@ -12,6 +12,7 @@ import type {
   HighScoreEntry,
 } from '../types/index.ts';
 import { DEFAULT_UI_CONFIG, DEFAULT_CONFIG } from '../types/index.ts';
+import { MAX_HIGH_SCORES } from '../storage/Storage.ts';
 
 /** Font sizes used in UI rendering */
 const FONT_SIZES = {
@@ -96,6 +97,8 @@ export class UIRenderer {
   private readonly width: number;
   private readonly height: number;
   private readonly config: UIOverlayConfig;
+  /** Cached width of "AAA" text for name input cursor positioning */
+  private nameInputTextWidth: number | null = null;
 
   constructor(
     ctx: CanvasRenderingContext2D,
@@ -176,12 +179,12 @@ export class UIRenderer {
     // Instructions
     this.ctx.fillStyle = this.config.textColor;
     this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
-    this.ctx.fillText('Press ESC to resume', this.width / 2, this.height / 2 + LAYOUT.pauseInstructionOffsetY);
+    this.ctx.fillText('ESC: 再開', this.width / 2, this.height / 2 + LAYOUT.pauseInstructionOffsetY);
 
     // Additional hint
     this.ctx.fillStyle = UI_COLORS.hintText;
     this.ctx.font = `${FONT_SIZES.pauseHint}px ${this.config.fontFamily}`;
-    this.ctx.fillText('Press Q to quit to menu', this.width / 2, this.height / 2 + LAYOUT.pauseHintOffsetY);
+    this.ctx.fillText('Q: メニューに戻る', this.width / 2, this.height / 2 + LAYOUT.pauseHintOffsetY);
   }
 
   /**
@@ -275,7 +278,7 @@ export class UIRenderer {
     this.ctx.fillText('LV', LAYOUT.rankingColLevel, headerY);
 
     // Score entries
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < MAX_HIGH_SCORES; i++) {
       const y = LAYOUT.rankingTableY + (i + 1) * LAYOUT.rankingRowHeight;
       const entry = scores[i];
       const isHighlight = i === highlightIndex;
@@ -312,7 +315,7 @@ export class UIRenderer {
     this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'center';
     this.ctx.fillText(
-      'Press Enter to continue',
+      'Enter: 続ける  Esc: メニュー',
       this.width / 2,
       this.height - LAYOUT.instructionBottomMargin
     );
@@ -360,7 +363,11 @@ export class UIRenderer {
 
     // Display name with padding for 3 characters
     const displayName = currentName.padEnd(3, '_');
-    const nameWidth = this.ctx.measureText('AAA').width;
+    // Cache measureText result to avoid per-frame calls (same font is set above)
+    if (this.nameInputTextWidth === null) {
+      this.nameInputTextWidth = this.ctx.measureText('AAA').width;
+    }
+    const nameWidth = this.nameInputTextWidth;
     const nameX = this.width / 2 - nameWidth / 2;
 
     this.ctx.textAlign = 'left';
@@ -383,7 +390,7 @@ export class UIRenderer {
     this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'center';
     this.ctx.fillText(
-      'A-Z: Input  Backspace: Delete  Enter: Confirm',
+      'A-Z のみ入力可  Backspace: 削除  Enter: 確定  Esc: キャンセル',
       this.width / 2,
       this.height - LAYOUT.instructionBottomMargin
     );

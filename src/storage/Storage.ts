@@ -10,7 +10,7 @@ import type { HighScoreEntry } from '../types/index.ts';
 const HIGH_SCORES_KEY = 'tetris_high_scores';
 
 /** Maximum number of high score entries to keep */
-const MAX_HIGH_SCORES = 10;
+export const MAX_HIGH_SCORES = 10;
 
 /** Default player name */
 const DEFAULT_PLAYER_NAME = 'AAA';

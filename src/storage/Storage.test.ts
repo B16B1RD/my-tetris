@@ -160,6 +160,10 @@ describe('Storage', () => {
   });
 
   describe('getStorage singleton', () => {
+    // Note: Singleton instance is shared across tests, but each test uses a fresh
+    // Storage instance created in beforeEach. The singleton test verifies behavior
+    // in production usage. Test isolation is maintained because all data operations
+    // go through localStorage which is cleared in beforeEach via clearHighScores().
     it('should return the same instance', () => {
       const instance1 = getStorage();
       const instance2 = getStorage();
@@ -212,6 +216,9 @@ describe('Storage', () => {
     });
 
     it('should filter out entries with NaN or Infinity', () => {
+      // Note: JSON.stringify converts NaN to null and Infinity to null.
+      // This test verifies that isValidEntry correctly rejects these null values
+      // when they appear in parsed JSON data (type check fails: null is not a number).
       const invalidData = [
         { name: 'AAA', score: NaN, level: 1, lines: 10, date: '2024-01-01' },
         { name: 'BBB', score: Infinity, level: 2, lines: 20, date: '2024-01-01' },
@@ -286,6 +293,9 @@ describe('Storage', () => {
     });
 
     it('should maintain order for same scores', () => {
+      // Note: This test relies on Array.prototype.sort being stable (same-value
+      // elements maintain their relative order). ECMAScript 2019 (ES10) guarantees
+      // stable sort for arrays. All modern browsers and Node.js 12+ support this.
       storage.addHighScore(createTestEntry('AAA', 1000));
       storage.addHighScore(createTestEntry('BBB', 1000));
       storage.addHighScore(createTestEntry('CCC', 1000));

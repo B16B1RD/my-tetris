@@ -454,6 +454,13 @@ export class GameManager {
       this.submitHighScore();
       return;
     }
+
+    // Escape to cancel (skip high score entry)
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.cancelNameInput();
+      return;
+    }
   }
 
   /**
@@ -464,6 +471,17 @@ export class GameManager {
       e.preventDefault();
       this.goToMenu();
     }
+  }
+
+  /**
+   * Cancel name input and go to game over screen.
+   */
+  private cancelNameInput(): void {
+    this.startTransition('fade-out', () => {
+      this.state = 'gameover';
+      this.gameOverSelectedIndex = 0;
+      this.startTransition('fade-in');
+    });
   }
 
   /**
