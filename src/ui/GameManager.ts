@@ -13,6 +13,7 @@ import type {
   InputAction,
   LineClearResult,
   GameStats,
+  HighScoreEntry,
 } from '../types/index.ts';
 import { DEFAULT_CONFIG } from '../types/index.ts';
 import { Board } from '../game/Board.ts';
@@ -25,6 +26,7 @@ import { BoardRenderer } from '../rendering/BoardRenderer.ts';
 import { UIRenderer } from '../rendering/UIRenderer.ts';
 import { GameLoop } from '../systems/GameLoop.ts';
 import { InputHandler } from '../systems/InputHandler.ts';
+import { getStorage } from '../storage/Storage.ts';
 
 /** Font style for FPS counter display */
 const FPS_FONT = '12px monospace';
@@ -37,6 +39,7 @@ const TRANSITION_DURATION = 300;
  */
 const MAIN_MENU_ITEMS: MenuItem[] = [
   { label: 'Start Game', action: 'start' },
+  { label: 'Rankings', action: 'rankings' },
   { label: 'Settings', action: 'settings' },
   { label: 'Statistics', action: 'statistics' },
 ];
@@ -46,6 +49,7 @@ const MAIN_MENU_ITEMS: MenuItem[] = [
  */
 const GAME_OVER_MENU_ITEMS: MenuItem[] = [
   { label: 'Retry', action: 'retry' },
+  { label: 'Rankings', action: 'rankings' },
   { label: 'Main Menu', action: 'menu' },
 ];
 
@@ -86,6 +90,16 @@ export class GameManager {
   };
 
   private playState: PlayState | null = null;
+
+  // High score and name input state
+  private nameInputValue = '';
+  private nameInputRank = 0;
+  private nameInputScore = 0;
+  private nameInputLevel = 0;
+  private nameInputLines = 0;
+  private rankingHighlightIndex = -1;
+  private cursorBlinkTimer = 0;
+  private showCursor = true;
 
   // Event listener references for cleanup
   private readonly boundHandleVisibilityChange: () => void;
@@ -205,6 +219,10 @@ export class GameManager {
       this.handleGameOverNavigation(e);
     } else if (this.state === 'paused') {
       this.handlePauseNavigation(e);
+    } else if (this.state === 'name-input') {
+      this.handleNameInputNavigation(e);
+    } else if (this.state === 'ranking') {
+      this.handleRankingNavigation(e);
     }
   }
 
@@ -275,6 +293,9 @@ export class GameManager {
       case 'start':
         this.startGame();
         break;
+      case 'rankings':
+        this.showRanking();
+        break;
       case 'settings':
         this.announce('Settings - Coming soon');
         break;
@@ -294,6 +315,9 @@ export class GameManager {
     switch (item.action) {
       case 'retry':
         this.startGame();
+        break;
+      case 'rankings':
+        this.showRanking();
         break;
       case 'menu':
         this.goToMenu();
@@ -359,6 +383,7 @@ export class GameManager {
       this.state = 'menu';
       this.playState = null;
       this.menuSelectedIndex = 0;
+      this.rankingHighlightIndex = -1;
       this.startTransition('fade-in');
     });
   }
@@ -371,12 +396,111 @@ export class GameManager {
   }
 
   /**
+   * Show ranking screen.
+   */
+  private showRanking(): void {
+    this.startTransition('fade-out', () => {
+      this.state = 'ranking';
+      this.startTransition('fade-in');
+    });
+  }
+
+  /**
+   * Handle name input keyboard navigation.
+   */
+  private handleNameInputNavigation(e: KeyboardEvent): void {
+    const key = e.key.toUpperCase();
+
+    // A-Z input
+    if (/^[A-Z]$/.test(key) && this.nameInputValue.length < 3) {
+      e.preventDefault();
+      this.nameInputValue += key;
+      return;
+    }
+
+    // Backspace
+    if (e.key === 'Backspace' && this.nameInputValue.length > 0) {
+      e.preventDefault();
+      this.nameInputValue = this.nameInputValue.slice(0, -1);
+      return;
+    }
+
+    // Enter to confirm
+    if (e.key === 'Enter' && this.nameInputValue.length > 0) {
+      e.preventDefault();
+      this.submitHighScore();
+      return;
+    }
+  }
+
+  /**
+   * Handle ranking screen keyboard navigation.
+   */
+  private handleRankingNavigation(e: KeyboardEvent): void {
+    if (e.key === 'Enter' || e.key === 'Escape') {
+      e.preventDefault();
+      this.goToMenu();
+    }
+  }
+
+  /**
+   * Submit the high score with entered name.
+   */
+  private submitHighScore(): void {
+    const storage = getStorage();
+    const entry = storage.createEntry(
+      this.nameInputValue,
+      this.nameInputScore,
+      this.nameInputLevel,
+      this.nameInputLines
+    );
+    storage.addHighScore(entry);
+
+    // Find the index of the new entry in the sorted list
+    const scores = storage.getHighScores();
+    this.rankingHighlightIndex = scores.findIndex(
+      (s) =>
+        s.name === entry.name &&
+        s.score === entry.score &&
+        s.date === entry.date
+    );
+
+    this.startTransition('fade-out', () => {
+      this.state = 'ranking';
+      this.startTransition('fade-in');
+    });
+  }
+
+  /**
    * Handle game over.
    */
   private handleGameOver(): void {
-    this.state = 'gameover';
-    this.gameOverSelectedIndex = 0;
-    this.announce('ゲームオーバー');
+    const stats = this.playState?.scoreManager.stats;
+    if (!stats) {
+      this.state = 'gameover';
+      this.gameOverSelectedIndex = 0;
+      this.announce('ゲームオーバー');
+      return;
+    }
+
+    const storage = getStorage();
+    if (storage.isHighScore(stats.score)) {
+      // New high score! Show name input screen
+      const rank = storage.getScoreRank(stats.score);
+      this.nameInputScore = stats.score;
+      this.nameInputLevel = stats.level;
+      this.nameInputLines = stats.lines;
+      this.nameInputRank = rank ?? 1;
+      this.nameInputValue = '';
+      this.cursorBlinkTimer = 0;
+      this.showCursor = true;
+      this.state = 'name-input';
+      this.announce('新しいハイスコア!');
+    } else {
+      this.state = 'gameover';
+      this.gameOverSelectedIndex = 0;
+      this.announce('ゲームオーバー');
+    }
   }
 
   /**
@@ -635,6 +759,15 @@ export class GameManager {
     this.updateTransition(deltaTime);
     this.inputHandler.update(performance.now());
 
+    // Update cursor blink for name input
+    if (this.state === 'name-input') {
+      this.cursorBlinkTimer += deltaTime;
+      if (this.cursorBlinkTimer >= 500) {
+        this.cursorBlinkTimer = 0;
+        this.showCursor = !this.showCursor;
+      }
+    }
+
     if (this.state !== 'playing' || !this.playState) return;
 
     // Spawn first tetromino if needed
@@ -698,6 +831,23 @@ export class GameManager {
             this.gameOverSelectedIndex
           );
         }
+        break;
+
+      case 'name-input':
+        this.renderGameplay();
+        this.uiRenderer.renderNameInput(
+          this.nameInputScore,
+          this.nameInputRank,
+          this.nameInputValue,
+          this.showCursor
+        );
+        break;
+
+      case 'ranking':
+        this.uiRenderer.renderRanking(
+          getStorage().getHighScores(),
+          this.rankingHighlightIndex
+        );
         break;
     }
 
