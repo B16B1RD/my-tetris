@@ -294,17 +294,6 @@ export class ScoreManager {
   }
 
   /**
-   * Called when a piece locks without clearing lines.
-   * Resets the combo counter.
-   */
-  onPieceLock(): void {
-    // Combo is reset when a piece locks without clearing lines
-    // This method should be called by the game when a piece locks
-    // The actual reset happens in processLineClear when linesCleared is 0
-    // and there's no T-Spin
-  }
-
-  /**
    * Reset combo counter (called when piece locks without line clear).
    */
   resetCombo(): void {
@@ -323,18 +312,18 @@ export class ScoreManager {
 
   /**
    * Add soft drop bonus points.
-   * @param cells - Number of cells dropped
+   * @param cells - Number of cells dropped (must be non-negative)
    */
   addSoftDropBonus(cells: number): void {
-    this._score += cells * SOFT_DROP_BONUS;
+    this._score += Math.max(0, cells) * SOFT_DROP_BONUS;
   }
 
   /**
    * Add hard drop bonus points.
-   * @param cells - Number of cells dropped
+   * @param cells - Number of cells dropped (must be non-negative)
    */
   addHardDropBonus(cells: number): void {
-    this._score += cells * HARD_DROP_BONUS;
+    this._score += Math.max(0, cells) * HARD_DROP_BONUS;
   }
 
   /**

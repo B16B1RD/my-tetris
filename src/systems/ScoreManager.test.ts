@@ -32,6 +32,11 @@ describe('ScoreManager', () => {
       const manager = new ScoreManager(0);
       expect(manager.level).toBe(1);
     });
+
+    it('should enforce minimum level of 1 for negative values', () => {
+      const manager = new ScoreManager(-5);
+      expect(manager.level).toBe(1);
+    });
   });
 
   describe('line clear scoring', () => {
@@ -154,6 +159,16 @@ describe('ScoreManager', () => {
       };
       const points = scoreManager.processLineClear(result);
       expect(points).toBe(1600);
+    });
+
+    it('should score T-Spin Mini Double at 400 × level', () => {
+      const result: LineClearResult = {
+        linesCleared: 2,
+        tspinType: 'mini',
+        description: 'T-Spin Mini Double',
+      };
+      const points = scoreManager.processLineClear(result);
+      expect(points).toBe(400);
     });
   });
 
@@ -287,6 +302,19 @@ describe('ScoreManager', () => {
       expect(scoreManager.combo).toBe(0);
 
       scoreManager.processLineClear(noLines);
+      expect(scoreManager.combo).toBe(-1);
+    });
+
+    it('should reset combo via resetCombo method', () => {
+      const single: LineClearResult = {
+        linesCleared: 1,
+        tspinType: 'none',
+        description: 'Single',
+      };
+      scoreManager.processLineClear(single);
+      expect(scoreManager.combo).toBe(0);
+
+      scoreManager.resetCombo();
       expect(scoreManager.combo).toBe(-1);
     });
   });
