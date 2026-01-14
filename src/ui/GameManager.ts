@@ -71,6 +71,30 @@ interface PlayState {
 }
 
 /**
+ * State for name input screen.
+ */
+interface NameInputState {
+  value: string;
+  rank: number;
+  score: number;
+  level: number;
+  lines: number;
+  cursorBlinkTimer: number;
+  showCursor: boolean;
+}
+
+/** Default name input state */
+const DEFAULT_NAME_INPUT_STATE: NameInputState = {
+  value: '',
+  rank: 0,
+  score: 0,
+  level: 0,
+  lines: 0,
+  cursorBlinkTimer: 0,
+  showCursor: true,
+};
+
+/**
  * Manages the entire game lifecycle including menus, gameplay, and transitions.
  */
 export class GameManager {
@@ -94,15 +118,9 @@ export class GameManager {
   private playState: PlayState | null = null;
 
   // High score and name input state
-  private nameInputValue = '';
-  private nameInputRank = 0;
-  private nameInputScore = 0;
-  private nameInputLevel = 0;
-  private nameInputLines = 0;
+  private nameInput: NameInputState = { ...DEFAULT_NAME_INPUT_STATE };
   private rankingHighlightIndex = -1;
   private rankingScoresCache: HighScoreEntry[] = [];
-  private cursorBlinkTimer = 0;
-  private showCursor = true;
 
   // Event listener references for cleanup
   private readonly boundHandleVisibilityChange: () => void;
@@ -417,21 +435,21 @@ export class GameManager {
     const key = e.key.toUpperCase();
 
     // A-Z input
-    if (/^[A-Z]$/.test(key) && this.nameInputValue.length < 3) {
+    if (/^[A-Z]$/.test(key) && this.nameInput.value.length < 3) {
       e.preventDefault();
-      this.nameInputValue += key;
+      this.nameInput.value += key;
       return;
     }
 
     // Backspace
-    if (e.key === 'Backspace' && this.nameInputValue.length > 0) {
+    if (e.key === 'Backspace' && this.nameInput.value.length > 0) {
       e.preventDefault();
-      this.nameInputValue = this.nameInputValue.slice(0, -1);
+      this.nameInput.value = this.nameInput.value.slice(0, -1);
       return;
     }
 
     // Enter to confirm
-    if (e.key === 'Enter' && this.nameInputValue.length > 0) {
+    if (e.key === 'Enter' && this.nameInput.value.length > 0) {
       e.preventDefault();
       this.submitHighScore();
       return;
@@ -453,10 +471,10 @@ export class GameManager {
    */
   private submitHighScore(): void {
     const entry = this.storage.createEntry(
-      this.nameInputValue,
-      this.nameInputScore,
-      this.nameInputLevel,
-      this.nameInputLines
+      this.nameInput.value,
+      this.nameInput.score,
+      this.nameInput.level,
+      this.nameInput.lines
     );
     this.storage.addHighScore(entry);
 
@@ -490,13 +508,13 @@ export class GameManager {
     if (this.storage.isHighScore(stats.score)) {
       // New high score! Show name input screen
       const rank = this.storage.getScoreRank(stats.score);
-      this.nameInputScore = stats.score;
-      this.nameInputLevel = stats.level;
-      this.nameInputLines = stats.lines;
-      this.nameInputRank = rank ?? 1;
-      this.nameInputValue = '';
-      this.cursorBlinkTimer = 0;
-      this.showCursor = true;
+      this.nameInput = {
+        ...DEFAULT_NAME_INPUT_STATE,
+        score: stats.score,
+        level: stats.level,
+        lines: stats.lines,
+        rank: rank ?? 1,
+      };
       this.state = 'name-input';
       this.announce('新しいハイスコア!');
     } else {
@@ -764,10 +782,10 @@ export class GameManager {
 
     // Update cursor blink for name input
     if (this.state === 'name-input') {
-      this.cursorBlinkTimer += deltaTime;
-      if (this.cursorBlinkTimer >= 500) {
-        this.cursorBlinkTimer = 0;
-        this.showCursor = !this.showCursor;
+      this.nameInput.cursorBlinkTimer += deltaTime;
+      if (this.nameInput.cursorBlinkTimer >= 500) {
+        this.nameInput.cursorBlinkTimer = 0;
+        this.nameInput.showCursor = !this.nameInput.showCursor;
       }
     }
 
@@ -839,10 +857,10 @@ export class GameManager {
       case 'name-input':
         this.renderGameplay();
         this.uiRenderer.renderNameInput(
-          this.nameInputScore,
-          this.nameInputRank,
-          this.nameInputValue,
-          this.showCursor
+          this.nameInput.score,
+          this.nameInput.rank,
+          this.nameInput.value,
+          this.nameInput.showCursor
         );
         break;
 

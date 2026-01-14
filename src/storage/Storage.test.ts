@@ -303,7 +303,7 @@ describe('Storage', () => {
     it('should return empty array when localStorage.getItem throws', () => {
       const originalGetItem = localStorage.getItem.bind(localStorage);
       try {
-        localStorage.getItem = () => {
+        localStorage.getItem = (): string | null => {
           throw new Error('Storage error');
         };
 
@@ -328,6 +328,107 @@ describe('Storage', () => {
       localStorage.setItem('tetris_high_scores', JSON.stringify(nestedInvalid));
       const scores = storage.getHighScores();
       expect(scores).toEqual([]);
+    });
+
+    it('should return false when localStorage.setItem throws non-quota error', () => {
+      // Create mock localStorage with throwing setItem
+      const originalLocalStorage = globalThis.localStorage;
+      const mockLocalStorage = {
+        ...originalLocalStorage,
+        getItem: originalLocalStorage.getItem.bind(originalLocalStorage),
+        setItem: (): void => {
+          throw new Error('Generic storage error');
+        },
+        removeItem: originalLocalStorage.removeItem.bind(originalLocalStorage),
+        clear: originalLocalStorage.clear.bind(originalLocalStorage),
+        key: originalLocalStorage.key.bind(originalLocalStorage),
+        length: originalLocalStorage.length,
+      };
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: mockLocalStorage,
+        configurable: true,
+      });
+
+      try {
+        const testStorage = new Storage();
+        const result = testStorage.addHighScore(createTestEntry('AAA', 1000));
+        expect(result).toBe(false);
+      } finally {
+        Object.defineProperty(globalThis, 'localStorage', {
+          value: originalLocalStorage,
+          configurable: true,
+        });
+      }
+    });
+
+    it('should attempt recovery when QuotaExceededError occurs', () => {
+      let callCount = 0;
+      const originalLocalStorage = globalThis.localStorage;
+      const originalSetItem = originalLocalStorage.setItem.bind(originalLocalStorage);
+
+      const mockLocalStorage = {
+        ...originalLocalStorage,
+        getItem: originalLocalStorage.getItem.bind(originalLocalStorage),
+        setItem: (key: string, value: string): void => {
+          callCount++;
+          if (callCount === 1) {
+            const error = new DOMException('Quota exceeded', 'QuotaExceededError');
+            throw error;
+          }
+          originalSetItem(key, value);
+        },
+        removeItem: originalLocalStorage.removeItem.bind(originalLocalStorage),
+        clear: originalLocalStorage.clear.bind(originalLocalStorage),
+        key: originalLocalStorage.key.bind(originalLocalStorage),
+        length: originalLocalStorage.length,
+      };
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: mockLocalStorage,
+        configurable: true,
+      });
+
+      try {
+        const testStorage = new Storage();
+        const result = testStorage.addHighScore(createTestEntry('AAA', 1000));
+        expect(result).toBe(true);
+        expect(callCount).toBe(2);
+      } finally {
+        Object.defineProperty(globalThis, 'localStorage', {
+          value: originalLocalStorage,
+          configurable: true,
+        });
+      }
+    });
+
+    it('should return false when QuotaExceededError recovery also fails', () => {
+      const originalLocalStorage = globalThis.localStorage;
+      const mockLocalStorage = {
+        ...originalLocalStorage,
+        getItem: originalLocalStorage.getItem.bind(originalLocalStorage),
+        setItem: (): void => {
+          const error = new DOMException('Quota exceeded', 'QuotaExceededError');
+          throw error;
+        },
+        removeItem: originalLocalStorage.removeItem.bind(originalLocalStorage),
+        clear: originalLocalStorage.clear.bind(originalLocalStorage),
+        key: originalLocalStorage.key.bind(originalLocalStorage),
+        length: originalLocalStorage.length,
+      };
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: mockLocalStorage,
+        configurable: true,
+      });
+
+      try {
+        const testStorage = new Storage();
+        const result = testStorage.addHighScore(createTestEntry('AAA', 1000));
+        expect(result).toBe(false);
+      } finally {
+        Object.defineProperty(globalThis, 'localStorage', {
+          value: originalLocalStorage,
+          configurable: true,
+        });
+      }
     });
   });
 });

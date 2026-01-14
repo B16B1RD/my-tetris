@@ -75,6 +75,7 @@ const LAYOUT = {
   nameInputLabelY: 240,
   nameInputValueY: 290,
   nameInputCursorWidth: 20,
+  nameInputCursorOffsetY: 15,
 } as const;
 
 /** Colors for UI elements */
@@ -371,7 +372,7 @@ export class UIRenderer {
       this.ctx.fillStyle = UI_COLORS.nameInputCursor;
       this.ctx.fillRect(
         cursorX,
-        LAYOUT.nameInputValueY - 15,
+        LAYOUT.nameInputValueY - LAYOUT.nameInputCursorOffsetY,
         LAYOUT.nameInputCursorWidth,
         3
       );
