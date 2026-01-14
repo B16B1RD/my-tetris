@@ -9,8 +9,10 @@ import type {
   UIOverlayConfig,
   TransitionState,
   GameStats,
+  HighScoreEntry,
 } from '../types/index.ts';
 import { DEFAULT_UI_CONFIG, DEFAULT_CONFIG } from '../types/index.ts';
+import { MAX_HIGH_SCORES } from '../storage/Storage.ts';
 
 /** Font sizes used in UI rendering */
 const FONT_SIZES = {
@@ -26,6 +28,15 @@ const FONT_SIZES = {
   gameOverScore: 24,
   gameOverStats: 20,
   gameOverMenuItem: 22,
+  // Ranking screen
+  rankingTitle: 36,
+  rankingHeader: 16,
+  rankingEntry: 18,
+  rankingEntryHighlight: 18,
+  // Name input screen
+  nameInputTitle: 32,
+  nameInputLabel: 20,
+  nameInputValue: 36,
 } as const;
 
 /** Layout spacing values */
@@ -51,12 +62,30 @@ const LAYOUT = {
   gameOverMenuOffsetY: 60,
   /** Bottom margin for instructions */
   instructionBottomMargin: 40,
+  /** Ranking screen layout */
+  rankingTitleY: 60,
+  rankingTableY: 110,
+  rankingRowHeight: 28,
+  rankingColRank: 40,
+  rankingColName: 100,
+  rankingColScore: 220,
+  rankingColLevel: 310,
+  /** Name input screen layout */
+  nameInputTitleY: 100,
+  nameInputScoreY: 160,
+  nameInputLabelY: 240,
+  nameInputValueY: 290,
+  nameInputCursorWidth: 20,
+  nameInputCursorOffsetY: 15,
 } as const;
 
 /** Colors for UI elements */
 const UI_COLORS = {
   hintText: '#666666',
   gameOverTitle: '#ff4444',
+  rankingNew: '#ffdd00',
+  rankingHeader: '#888888',
+  nameInputCursor: '#00ffff',
 } as const;
 
 /**
@@ -68,6 +97,8 @@ export class UIRenderer {
   private readonly width: number;
   private readonly height: number;
   private readonly config: UIOverlayConfig;
+  /** Cached width of "AAA" text for name input cursor positioning */
+  private nameInputTextWidth: number | null = null;
 
   constructor(
     ctx: CanvasRenderingContext2D,
@@ -148,12 +179,12 @@ export class UIRenderer {
     // Instructions
     this.ctx.fillStyle = this.config.textColor;
     this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
-    this.ctx.fillText('Press ESC to resume', this.width / 2, this.height / 2 + LAYOUT.pauseInstructionOffsetY);
+    this.ctx.fillText('ESC: 再開', this.width / 2, this.height / 2 + LAYOUT.pauseInstructionOffsetY);
 
     // Additional hint
     this.ctx.fillStyle = UI_COLORS.hintText;
     this.ctx.font = `${FONT_SIZES.pauseHint}px ${this.config.fontFamily}`;
-    this.ctx.fillText('Press Q to quit to menu', this.width / 2, this.height / 2 + LAYOUT.pauseHintOffsetY);
+    this.ctx.fillText('Q: メニューに戻る', this.width / 2, this.height / 2 + LAYOUT.pauseHintOffsetY);
   }
 
   /**
@@ -219,6 +250,150 @@ export class UIRenderer {
 
     this.ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
     this.ctx.fillRect(0, 0, this.width, this.height);
+  }
+
+  /**
+   * Render the ranking/high scores screen.
+   * @param scores - Array of high score entries
+   * @param highlightIndex - Index to highlight as new entry (-1 for none)
+   */
+  renderRanking(scores: HighScoreEntry[], highlightIndex = -1): void {
+    this.drawOverlayBackground();
+
+    // Title
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.rankingTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('HIGH SCORES', this.width / 2, LAYOUT.rankingTitleY);
+
+    // Header row
+    this.ctx.fillStyle = UI_COLORS.rankingHeader;
+    this.ctx.font = `${FONT_SIZES.rankingHeader}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'left';
+    const headerY = LAYOUT.rankingTableY;
+    this.ctx.fillText('#', LAYOUT.rankingColRank, headerY);
+    this.ctx.fillText('NAME', LAYOUT.rankingColName, headerY);
+    this.ctx.fillText('SCORE', LAYOUT.rankingColScore, headerY);
+    this.ctx.fillText('LV', LAYOUT.rankingColLevel, headerY);
+
+    // Score entries
+    for (let i = 0; i < MAX_HIGH_SCORES; i++) {
+      const y = LAYOUT.rankingTableY + (i + 1) * LAYOUT.rankingRowHeight;
+      const entry = scores[i];
+      const isHighlight = i === highlightIndex;
+
+      this.ctx.fillStyle = isHighlight
+        ? UI_COLORS.rankingNew
+        : this.config.textColor;
+      this.ctx.font = isHighlight
+        ? `bold ${FONT_SIZES.rankingEntryHighlight}px ${this.config.fontFamily}`
+        : `${FONT_SIZES.rankingEntry}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'left';
+
+      // Rank
+      this.ctx.fillText(`${i + 1}.`, LAYOUT.rankingColRank, y);
+
+      if (entry) {
+        // Name
+        this.ctx.fillText(entry.name, LAYOUT.rankingColName, y);
+        // Score
+        this.ctx.fillText(entry.score.toLocaleString(), LAYOUT.rankingColScore, y);
+        // Level
+        this.ctx.fillText(`${entry.level}`, LAYOUT.rankingColLevel, y);
+      } else {
+        // Empty slot
+        this.ctx.fillStyle = UI_COLORS.hintText;
+        this.ctx.fillText('---', LAYOUT.rankingColName, y);
+        this.ctx.fillText('---', LAYOUT.rankingColScore, y);
+        this.ctx.fillText('-', LAYOUT.rankingColLevel, y);
+      }
+    }
+
+    // Instructions
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(
+      'Enter: 続ける  Esc: メニュー',
+      this.width / 2,
+      this.height - LAYOUT.instructionBottomMargin
+    );
+  }
+
+  /**
+   * Render the name input screen.
+   * @param score - The achieved score
+   * @param rank - The rank achieved (1-10)
+   * @param currentName - Current input name
+   * @param showCursor - Whether to show blinking cursor
+   */
+  renderNameInput(
+    score: number,
+    rank: number,
+    currentName: string,
+    showCursor = true
+  ): void {
+    this.drawOverlayBackground();
+
+    // Title - NEW HIGH SCORE!
+    this.ctx.fillStyle = UI_COLORS.rankingNew;
+    this.ctx.font = `bold ${FONT_SIZES.nameInputTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('NEW HIGH SCORE!', this.width / 2, LAYOUT.nameInputTitleY);
+
+    // Score and rank
+    this.ctx.fillStyle = this.config.textColor;
+    this.ctx.font = `${FONT_SIZES.gameOverScore}px ${this.config.fontFamily}`;
+    this.ctx.fillText(
+      `#${rank} - ${score.toLocaleString()} pts`,
+      this.width / 2,
+      LAYOUT.nameInputScoreY
+    );
+
+    // Enter name label
+    this.ctx.fillStyle = this.config.textColor;
+    this.ctx.font = `${FONT_SIZES.nameInputLabel}px ${this.config.fontFamily}`;
+    this.ctx.fillText('Enter your name:', this.width / 2, LAYOUT.nameInputLabelY);
+
+    // Name input field
+    this.ctx.fillStyle = this.config.highlightColor;
+    this.ctx.font = `bold ${FONT_SIZES.nameInputValue}px ${this.config.fontFamily}`;
+
+    // Display name with padding for 3 characters
+    const displayName = currentName.padEnd(3, '_');
+    // Cache measureText result to avoid per-frame calls (same font is set above)
+    if (this.nameInputTextWidth === null) {
+      this.nameInputTextWidth = this.ctx.measureText('AAA').width;
+    }
+    const nameWidth = this.nameInputTextWidth;
+    const nameX = this.width / 2 - nameWidth / 2;
+
+    this.ctx.textAlign = 'left';
+    this.ctx.fillText(displayName, nameX, LAYOUT.nameInputValueY);
+
+    // Blinking cursor
+    if (showCursor && currentName.length < 3) {
+      const cursorX = nameX + this.ctx.measureText(currentName).width;
+      this.ctx.fillStyle = UI_COLORS.nameInputCursor;
+      this.ctx.fillRect(
+        cursorX,
+        LAYOUT.nameInputValueY - LAYOUT.nameInputCursorOffsetY,
+        LAYOUT.nameInputCursorWidth,
+        3
+      );
+    }
+
+    // Instructions
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(
+      'A-Z のみ入力可  Backspace: 削除  Enter: 確定  Esc: キャンセル',
+      this.width / 2,
+      this.height - LAYOUT.instructionBottomMargin
+    );
   }
 
   /**

@@ -1,12 +1,12 @@
 {
   "version": "1.0",
   "command": "zen:issue:start",
-  "issue_number": 9,
-  "branch": "feat/issue-9-game-ui-menu-pause-gameover",
+  "issue_number": 10,
+  "branch": "feat/issue-10-highscore-ranking",
   "phase": "phase4",
-  "timestamp": "2026-01-15T12:20:00+09:00",
+  "timestamp": "2026-01-15T12:06:00+09:00",
   "context": {
-    "issue_title": "ゲームUI（メニュー・ポーズ・ゲームオーバー）",
+    "issue_title": "ハイスコア保存・ランキング表示",
     "ready_for_implementation": true
   }
 }
