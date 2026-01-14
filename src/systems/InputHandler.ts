@@ -28,9 +28,9 @@ export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   moveLeft: ['ArrowLeft', 'KeyA'],
   moveRight: ['ArrowRight', 'KeyD'],
   softDrop: ['ArrowDown', 'KeyS'],
-  hardDrop: ['Space', 'ArrowUp'],
-  rotateClockwise: ['KeyX', 'KeyE'],
-  rotateCounterClockwise: ['KeyZ', 'ControlLeft', 'ControlRight', 'KeyQ'],
+  hardDrop: ['Space'],
+  rotateClockwise: ['ArrowUp', 'KeyX'],
+  rotateCounterClockwise: ['KeyZ', 'ControlLeft', 'ControlRight'],
   hold: ['ShiftLeft', 'ShiftRight', 'KeyC'],
   pause: ['Escape', 'KeyP', 'F1'],
 };

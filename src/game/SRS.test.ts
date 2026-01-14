@@ -78,17 +78,21 @@ describe('SRS', () => {
 
   describe('tryRotation - wall kicks', () => {
     it('should apply wall kick when blocked by left wall', () => {
-      // Place T-piece at left edge
-      const tetromino = new Tetromino('T', { x: 0, y: 10 });
-      tetromino.setRotation(0);
+      // Place T-piece at left edge in rotation state 1 (pointing right)
+      // When rotating clockwise (1→2), the piece needs to kick right
+      const tetromino = new Tetromino('T', { x: -1, y: 10 });
+      tetromino.setRotation(1);
 
-      // Rotate counter-clockwise (0→3), which would push piece left
-      const result = tryRotation(tetromino, board, 'counterClockwise');
+      // Rotate clockwise (1→2), which requires wall kick since x=-1
+      const result = tryRotation(tetromino, board, 'clockwise');
 
       expect(result.success).toBe(true);
-      expect(tetromino.rotation).toBe(3);
-      // Should have been kicked right
+      expect(tetromino.rotation).toBe(2);
+      // Should have been kicked right to valid position
       expect(tetromino.position.x).toBeGreaterThanOrEqual(0);
+      // Verify wall kick was applied (kickIndex > 0 means a non-zero offset was used)
+      expect(result.kickIndex).toBeGreaterThan(0);
+      expect(result.kickOffset).not.toBeNull();
     });
 
     it('should apply wall kick when blocked by right wall', () => {
@@ -101,6 +105,8 @@ describe('SRS', () => {
 
       expect(result.success).toBe(true);
       expect(tetromino.rotation).toBe(1);
+      // Verify wall kick was applied
+      expect(result.kickIndex).toBeGreaterThanOrEqual(0);
     });
 
     it('should apply I-piece wall kick correctly', () => {

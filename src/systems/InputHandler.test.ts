@@ -252,19 +252,31 @@ describe('InputHandler', () => {
     });
 
     it('should allow removing callbacks', () => {
-      const callback = (action: InputAction): void => {
+      const removableCallback = (action: InputAction): void => {
         receivedActions.push(action);
       };
 
-      // Clear existing callback and add new one
+      // Add the callback
+      handler.addCallback(removableCallback);
+
+      // Clear received actions for clarity
       receivedActions.length = 0;
 
-      handler.removeCallback(callback);
-
+      // Trigger an action - should be received
       window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowRight' }));
-
-      // Original callback should still receive (it's a different reference)
+      window.dispatchEvent(new KeyboardEvent('keyup', { code: 'ArrowRight' }));
       expect(receivedActions).toContain('moveRight');
+
+      // Now remove the same callback reference
+      handler.removeCallback(removableCallback);
+
+      // Clear and trigger again
+      receivedActions.length = 0;
+      window.dispatchEvent(new KeyboardEvent('keydown', { code: 'ArrowLeft' }));
+
+      // The removed callback should not receive the action
+      // (only the original callback from beforeEach should receive it)
+      expect(receivedActions.filter((a) => a === 'moveLeft').length).toBe(1);
     });
   });
 
@@ -292,6 +304,7 @@ describe('InputHandler', () => {
       expect(DEFAULT_KEY_BINDINGS.moveRight).toContain('ArrowRight');
       expect(DEFAULT_KEY_BINDINGS.softDrop).toContain('ArrowDown');
       expect(DEFAULT_KEY_BINDINGS.hardDrop).toContain('Space');
+      expect(DEFAULT_KEY_BINDINGS.rotateClockwise).toContain('ArrowUp');
       expect(DEFAULT_KEY_BINDINGS.pause).toContain('Escape');
     });
   });
