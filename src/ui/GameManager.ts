@@ -13,6 +13,7 @@ import type {
   InputAction,
   LineClearResult,
   GameStats,
+  HighScoreEntry,
 } from '../types/index.ts';
 import { DEFAULT_CONFIG } from '../types/index.ts';
 import { Board } from '../game/Board.ts';
@@ -99,6 +100,7 @@ export class GameManager {
   private nameInputLevel = 0;
   private nameInputLines = 0;
   private rankingHighlightIndex = -1;
+  private rankingScoresCache: HighScoreEntry[] = [];
   private cursorBlinkTimer = 0;
   private showCursor = true;
 
@@ -402,6 +404,7 @@ export class GameManager {
    */
   private showRanking(): void {
     this.startTransition('fade-out', () => {
+      this.rankingScoresCache = this.storage.getHighScores();
       this.state = 'ranking';
       this.startTransition('fade-in');
     });
@@ -457,9 +460,9 @@ export class GameManager {
     );
     this.storage.addHighScore(entry);
 
-    // Find the index of the new entry in the sorted list
-    const scores = this.storage.getHighScores();
-    this.rankingHighlightIndex = scores.findIndex(
+    // Find the index of the new entry in the sorted list and cache scores
+    this.rankingScoresCache = this.storage.getHighScores();
+    this.rankingHighlightIndex = this.rankingScoresCache.findIndex(
       (s) =>
         s.name === entry.name &&
         s.score === entry.score &&
@@ -845,7 +848,7 @@ export class GameManager {
 
       case 'ranking':
         this.uiRenderer.renderRanking(
-          this.storage.getHighScores(),
+          this.rankingScoresCache,
           this.rankingHighlightIndex
         );
         break;

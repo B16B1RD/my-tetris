@@ -64,11 +64,14 @@ export class Storage {
       typeof obj.level === 'number' &&
       typeof obj.lines === 'number' &&
       typeof obj.date === 'string' &&
-      obj.name.length > 0 &&
-      obj.name.length <= 10 &&
+      /^[A-Z]{1,10}$/.test(obj.name) &&
       Number.isFinite(obj.score) &&
       Number.isFinite(obj.level) &&
-      Number.isFinite(obj.lines)
+      Number.isFinite(obj.lines) &&
+      obj.score >= 0 &&
+      obj.score <= Number.MAX_SAFE_INTEGER &&
+      obj.level >= 1 &&
+      obj.lines >= 0
     );
   }
 

@@ -46,14 +46,14 @@ describe('Storage', () => {
 
     it('should maintain maximum of 10 scores', () => {
       for (let i = 0; i < 15; i++) {
-        storage.addHighScore(createTestEntry(`P${i}`, (i + 1) * 1000));
+        storage.addHighScore(createTestEntry(String.fromCharCode(65 + i), (i + 1) * 1000));
       }
 
       const scores = storage.getHighScores();
       expect(scores).toHaveLength(10);
-      // Highest score should be 15000 (P14)
+      // Highest score should be 15000 (O)
       expect(scores[0]?.score).toBe(15000);
-      // Lowest should be 6000 (P5)
+      // Lowest should be 6000 (F)
       expect(scores[9]?.score).toBe(6000);
     });
   });
@@ -70,7 +70,7 @@ describe('Storage', () => {
 
     it('should return true if score beats lowest when list is full', () => {
       for (let i = 0; i < 10; i++) {
-        storage.addHighScore(createTestEntry(`P${i}`, (i + 1) * 1000));
+        storage.addHighScore(createTestEntry(String.fromCharCode(65 + i), (i + 1) * 1000));
       }
       // Lowest is 1000, so 1500 should qualify
       expect(storage.isHighScore(1500)).toBe(true);
@@ -103,7 +103,7 @@ describe('Storage', () => {
 
     it('should return null if score does not qualify for full list', () => {
       for (let i = 0; i < 10; i++) {
-        storage.addHighScore(createTestEntry(`P${i}`, (i + 1) * 1000));
+        storage.addHighScore(createTestEntry(String.fromCharCode(65 + i), (i + 1) * 1000));
       }
       // 500 is below lowest (1000)
       expect(storage.getScoreRank(500)).toBe(null);
@@ -271,21 +271,26 @@ describe('Storage', () => {
 
       const scores = storage.getHighScores();
       expect(scores).toHaveLength(3);
-      // All have score 1000 - order is stable based on insertion
+      // All have score 1000 - verify stable sort maintains insertion order
+      expect(scores[0]?.name).toBe('AAA');
+      expect(scores[1]?.name).toBe('BBB');
+      expect(scores[2]?.name).toBe('CCC');
     });
   });
 
   describe('localStorage error handling', () => {
     it('should return empty array when localStorage.getItem throws', () => {
       const originalGetItem = localStorage.getItem.bind(localStorage);
-      localStorage.getItem = () => {
-        throw new Error('Storage error');
-      };
+      try {
+        localStorage.getItem = () => {
+          throw new Error('Storage error');
+        };
 
-      const scores = storage.getHighScores();
-      expect(scores).toEqual([]);
-
-      localStorage.getItem = originalGetItem;
+        const scores = storage.getHighScores();
+        expect(scores).toEqual([]);
+      } finally {
+        localStorage.getItem = originalGetItem;
+      }
     });
 
     it('should handle corrupted data gracefully', () => {
