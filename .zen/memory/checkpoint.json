@@ -1,21 +1,13 @@
 {
   "version": "1.0",
   "command": "zen:issue:start",
-  "issue_number": 5,
-  "branch": "feat/issue-5-tetrimino-movement-srs-rotation",
-  "phase": "phase5_implementation",
-  "timestamp": "2026-01-13T17:45:00+09:00",
+  "issue_number": 7,
+  "branch": "feat/issue-7-score-level-system",
+  "phase": "phase5_review",
+  "timestamp": "2026-01-15T12:45:00+09:00",
   "context": {
-    "issue_title": "テトリミノ移動・SRS回転システム",
-    "changed_files": [
-      "src/game/SRS.ts",
-      "src/game/SRS.test.ts",
-      "src/systems/InputHandler.ts",
-      "src/systems/InputHandler.test.ts",
-      "src/main.ts",
-      "vite.config.ts",
-      "package.json"
-    ],
-    "commits": ["f8534ae"]
+    "issue_title": "スコア・レベルシステム",
+    "pr_number": 19,
+    "review_result": "mergeable"
   }
 }
