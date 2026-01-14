@@ -142,7 +142,7 @@ describe('TSpin', () => {
     });
 
     describe('wall/edge detection', () => {
-      it('should count out-of-bounds positions as filled corners', () => {
+      it('should count out-of-bounds positions as filled corners (full T-Spin at left wall)', () => {
         // Place T-piece at left edge (x: -1 so left corners are out of bounds)
         // Center at x=0, y=11 means left corners at x=-1 are out of bounds
         const tetromino = new Tetromino('T', { x: -1, y: 10 });
@@ -154,11 +154,12 @@ describe('TSpin', () => {
 
         const result = detectTSpin(tetromino, board, true, 0);
         // Left wall provides 2 "filled" corners (out of bounds: front-left, back-left)
-        // Plus the one we set = 3 corners
-        expect(result.type).not.toBe('none');
+        // Plus the one we set (front-right) = 3 corners
+        // Both front corners filled (front-left out of bounds, front-right set), so it's full T-Spin
+        expect(result.type).toBe('full');
       });
 
-      it('should count bottom edge as filled corners', () => {
+      it('should count bottom edge as filled corners (T-Spin Mini at bottom)', () => {
         // Place T-piece near bottom in rotation state 2 (T points down)
         // So back corners are at the top (in bounds) and front corners at bottom (out of bounds)
         // Position y = totalHeight - 2, center at y = totalHeight - 1
@@ -177,7 +178,8 @@ describe('TSpin', () => {
         const result = detectTSpin(tetromino, board, true, 0);
         // Bottom edge provides 2 "filled" front corners (out of bounds)
         // Plus the one we set = 3 corners
-        expect(result.type).not.toBe('none');
+        // Both front corners are out of bounds and count as filled, so it's full T-Spin
+        expect(result.type).toBe('full');
       });
     });
   });

@@ -4,17 +4,21 @@
  * @description Implements T-Spin detection using the 3-corner rule per Tetris Guideline.
  */
 
-import type { Position, RotationState } from '../types/index.ts';
+import type { Position, RotationState, TSpinType } from '../types/index.ts';
 import type { Tetromino } from './Tetromino.ts';
 import type { Board } from './Board.ts';
 
-/**
- * Types of T-Spin actions.
- * - 'none': Not a T-Spin
- * - 'mini': T-Spin Mini (wall kick test 4 or special conditions)
- * - 'full': Full T-Spin (3 corners filled including both front corners)
- */
-export type TSpinType = 'none' | 'mini' | 'full';
+// Re-export TSpinType for backward compatibility
+export type { TSpinType } from '../types/index.ts';
+
+/** T-piece center offset within the 4x4 matrix */
+const T_CENTER_OFFSET: Position = { x: 1, y: 1 };
+
+/** Wall kick index that triggers T-Spin Mini (5th test, 0-indexed) */
+const TSPIN_MINI_KICK_INDEX = 4;
+
+/** Minimum corners required for T-Spin detection */
+const MIN_CORNERS_FOR_TSPIN = 3;
 
 /**
  * Result of T-Spin detection.
@@ -99,14 +103,14 @@ function isCornerFilled(
 
 /**
  * Get the center position of a T-piece.
- * The center is at (1, 1) in the piece's local 4x4 matrix.
+ * The center is at T_CENTER_OFFSET in the piece's local 4x4 matrix.
  * @param tetromino - The T-piece tetromino
  * @returns The center position in board coordinates
  */
 function getTCenter(tetromino: Tetromino): Position {
   return {
-    x: tetromino.position.x + 1,
-    y: tetromino.position.y + 1,
+    x: tetromino.position.x + T_CENTER_OFFSET.x,
+    y: tetromino.position.y + T_CENTER_OFFSET.y,
   };
 }
 
@@ -175,14 +179,14 @@ export function detectTSpin(
   }
 
   // 3-corner rule: need at least 3 corners filled
-  if (filledCount < 3) {
+  if (filledCount < MIN_CORNERS_FOR_TSPIN) {
     return { type: 'none', wasRotation };
   }
 
   // T-Spin Mini conditions:
-  // 1. Used wall kick test 4 (kickIndex === 4, which is the 5th test, 0-indexed)
+  // 1. Used wall kick test 4 (5th test, 0-indexed)
   // 2. OR only 1 front corner is filled (not both)
-  if (kickIndex === 4 || frontFilledCount < 2) {
+  if (kickIndex === TSPIN_MINI_KICK_INDEX || frontFilledCount < 2) {
     return { type: 'mini', wasRotation };
   }
 

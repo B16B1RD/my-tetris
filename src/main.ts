@@ -1,5 +1,5 @@
 import './style.css';
-import type { InputAction, LineClearResult, TSpinType } from './types/index.ts';
+import type { InputAction, LineClearResult } from './types/index.ts';
 import { DEFAULT_CONFIG } from './types/index.ts';
 import { Board } from './game/Board.ts';
 import { Tetromino } from './game/Tetromino.ts';
@@ -176,7 +176,7 @@ function performLineClear(state: DemoState): LineClearResult {
 
   return {
     linesCleared,
-    tspinType: tspinResult.type as TSpinType,
+    tspinType: tspinResult.type,
     description,
   };
 }
@@ -211,6 +211,27 @@ function lockPiece(state: DemoState): void {
 }
 
 /**
+ * Handle rotation with T-Spin tracking
+ */
+function handleRotation(
+  state: DemoState,
+  direction: 'clockwise' | 'counterClockwise'
+): void {
+  if (!state.currentTetromino) return;
+
+  const result = tryRotation(state.currentTetromino, state.board, direction);
+  if (result.success) {
+    // Track rotation for T-Spin detection
+    state.lastActionWasRotation = true;
+    state.lastKickIndex = result.kickIndex;
+    // Reset lock timer on successful rotation if grounded
+    if (state.isGrounded) {
+      state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
+    }
+  }
+}
+
+/**
  * Handle input actions
  */
 function handleInput(state: DemoState, action: InputAction): void {
@@ -236,32 +257,13 @@ function handleInput(state: DemoState, action: InputAction): void {
       hardDrop(state);
       break;
 
-    case 'rotateClockwise': {
-      const result = tryRotation(state.currentTetromino, state.board, 'clockwise');
-      if (result.success) {
-        // Track rotation for T-Spin detection
-        state.lastActionWasRotation = true;
-        state.lastKickIndex = result.kickIndex;
-        // Reset lock timer on successful rotation if grounded
-        if (state.isGrounded) {
-          state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
-        }
-      }
+    case 'rotateClockwise':
+      handleRotation(state, 'clockwise');
       break;
-    }
 
-    case 'rotateCounterClockwise': {
-      const result = tryRotation(state.currentTetromino, state.board, 'counterClockwise');
-      if (result.success) {
-        // Track rotation for T-Spin detection
-        state.lastActionWasRotation = true;
-        state.lastKickIndex = result.kickIndex;
-        if (state.isGrounded) {
-          state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
-        }
-      }
+    case 'rotateCounterClockwise':
+      handleRotation(state, 'counterClockwise');
       break;
-    }
 
     case 'hold':
       // Hold functionality not implemented yet
