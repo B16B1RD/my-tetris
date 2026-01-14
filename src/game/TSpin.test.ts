@@ -7,7 +7,6 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { Board } from './Board.ts';
 import { Tetromino } from './Tetromino.ts';
 import { detectTSpin, getTSpinDescription } from './TSpin.ts';
-import type { TSpinType } from './TSpin.ts';
 
 describe('TSpin', () => {
   let board: Board;
@@ -278,7 +277,7 @@ function fillTCorners(
  * Get corner positions for T-piece based on rotation state.
  * Returns [front-left, front-right, back-left, back-right] offsets from center.
  */
-function getTCornerPositions(rotation: number): Array<{ x: number; y: number }> {
+function getTCornerPositions(rotation: number): { x: number; y: number }[] {
   switch (rotation) {
     case 0: // T points up
       return [
