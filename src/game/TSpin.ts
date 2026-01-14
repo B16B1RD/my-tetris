@@ -8,7 +8,7 @@ import type { Position, RotationState, TSpinType } from '../types/index.ts';
 import type { Tetromino } from './Tetromino.ts';
 import type { Board } from './Board.ts';
 
-// Re-export TSpinType for backward compatibility
+// Re-export TSpinType for convenience
 export type { TSpinType } from '../types/index.ts';
 
 /** T-piece center offset within the 4x4 matrix */
@@ -51,9 +51,9 @@ const T_CORNERS: Record<RotationState, { front: Position[]; back: Position[] }> 
     back: [{ x: -1, y: 1 }, { x: 1, y: 1 }],
   },
   // State 1: T points right (R)
-  //   [*][ ]   <- corners at (0, -1) and (1, -1)
-  // [T][*]     <- center is at (0, 0) relative to piece position + (1, 1)
-  //   [*][ ]   <- corners at (0, 1) and (1, 1)
+  //   [*][ ]   <- front corner at (1, -1) relative to center
+  // [*][T][*]  <- center at offset (1, 1) in 4x4 matrix
+  //   [*][ ]   <- front corner at (1, 1) relative to center
   1: {
     front: [{ x: 1, y: -1 }, { x: 1, y: 1 }],
     back: [{ x: -1, y: -1 }, { x: -1, y: 1 }],
@@ -184,9 +184,9 @@ export function detectTSpin(
   }
 
   // T-Spin Mini conditions:
-  // 1. Used wall kick test 4 (5th test, 0-indexed)
+  // 1. Used wall kick test 4 or higher (5th+ test, 0-indexed)
   // 2. OR only 1 front corner is filled (not both)
-  if (kickIndex === TSPIN_MINI_KICK_INDEX || frontFilledCount < 2) {
+  if (kickIndex >= TSPIN_MINI_KICK_INDEX || frontFilledCount < 2) {
     return { type: 'mini', wasRotation };
   }
 
