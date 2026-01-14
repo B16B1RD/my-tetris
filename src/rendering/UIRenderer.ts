@@ -12,6 +12,53 @@ import type {
 } from '../types/index.ts';
 import { DEFAULT_UI_CONFIG, DEFAULT_CONFIG } from '../types/index.ts';
 
+/** Font sizes used in UI rendering */
+const FONT_SIZES = {
+  title: 48,
+  subtitle: 16,
+  menuItem: 24,
+  menuItemSelected: 24,
+  instruction: 14,
+  pauseTitle: 48,
+  pauseInstruction: 20,
+  pauseHint: 16,
+  gameOverTitle: 48,
+  gameOverScore: 24,
+  gameOverStats: 20,
+  gameOverMenuItem: 22,
+} as const;
+
+/** Layout spacing values */
+const LAYOUT = {
+  /** Offset from title to subtitle */
+  subtitleOffset: 40,
+  /** Height per menu item */
+  menuItemHeight: 50,
+  /** X offset for selection indicator */
+  selectorOffsetX: 80,
+  /** Game over menu item height */
+  gameOverMenuItemHeight: 45,
+  /** Game over selector X offset */
+  gameOverSelectorOffsetX: 70,
+  /** Pause text vertical offsets */
+  pauseTitleOffsetY: -40,
+  pauseInstructionOffsetY: 20,
+  pauseHintOffsetY: 60,
+  /** Game over stats vertical offsets */
+  statsOffsetY: -60,
+  statsLineSpacing: 35,
+  statsLineSpacing2: 65,
+  gameOverMenuOffsetY: 60,
+  /** Bottom margin for instructions */
+  instructionBottomMargin: 40,
+} as const;
+
+/** Colors for UI elements */
+const UI_COLORS = {
+  hintText: '#666666',
+  gameOverTitle: '#ff4444',
+} as const;
+
 /**
  * Renders UI overlay screens on canvas.
  * Handles menu, pause, and game over screens with transitions.
@@ -42,47 +89,46 @@ export class UIRenderer {
 
     // Title
     this.ctx.fillStyle = this.config.titleColor;
-    this.ctx.font = `bold 48px ${this.config.fontFamily}`;
+    this.ctx.font = `bold ${FONT_SIZES.title}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText('TETRIS', this.width / 2, this.height / 4);
 
     // Subtitle
     this.ctx.fillStyle = this.config.textColor;
-    this.ctx.font = `16px ${this.config.fontFamily}`;
-    this.ctx.fillText('Guideline Edition', this.width / 2, this.height / 4 + 40);
+    this.ctx.font = `${FONT_SIZES.subtitle}px ${this.config.fontFamily}`;
+    this.ctx.fillText('Guideline Edition', this.width / 2, this.height / 4 + LAYOUT.subtitleOffset);
 
     // Menu items
     const startY = this.height / 2;
-    const itemHeight = 50;
 
     items.forEach((item, index) => {
-      const y = startY + index * itemHeight;
+      const y = startY + index * LAYOUT.menuItemHeight;
       const isSelected = index === selectedIndex;
 
       if (isSelected) {
         // Draw selection indicator
         this.ctx.fillStyle = this.config.highlightColor;
-        this.ctx.font = `bold 24px ${this.config.fontFamily}`;
-        this.ctx.fillText('▶', this.width / 2 - 80, y);
+        this.ctx.font = `bold ${FONT_SIZES.menuItemSelected}px ${this.config.fontFamily}`;
+        this.ctx.fillText('▶', this.width / 2 - LAYOUT.selectorOffsetX, y);
       }
 
       this.ctx.fillStyle = isSelected
         ? this.config.highlightColor
         : this.config.textColor;
       this.ctx.font = isSelected
-        ? `bold 24px ${this.config.fontFamily}`
-        : `24px ${this.config.fontFamily}`;
+        ? `bold ${FONT_SIZES.menuItemSelected}px ${this.config.fontFamily}`
+        : `${FONT_SIZES.menuItem}px ${this.config.fontFamily}`;
       this.ctx.fillText(item.label, this.width / 2, y);
     });
 
     // Instructions
-    this.ctx.fillStyle = '#666666';
-    this.ctx.font = `14px ${this.config.fontFamily}`;
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
     this.ctx.fillText(
       '↑↓: 選択  Enter: 決定',
       this.width / 2,
-      this.height - 40
+      this.height - LAYOUT.instructionBottomMargin
     );
   }
 
@@ -94,20 +140,20 @@ export class UIRenderer {
 
     // PAUSED text
     this.ctx.fillStyle = this.config.titleColor;
-    this.ctx.font = `bold 48px ${this.config.fontFamily}`;
+    this.ctx.font = `bold ${FONT_SIZES.pauseTitle}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText('PAUSED', this.width / 2, this.height / 2 - 40);
+    this.ctx.fillText('PAUSED', this.width / 2, this.height / 2 + LAYOUT.pauseTitleOffsetY);
 
     // Instructions
     this.ctx.fillStyle = this.config.textColor;
-    this.ctx.font = `20px ${this.config.fontFamily}`;
-    this.ctx.fillText('Press ESC to resume', this.width / 2, this.height / 2 + 20);
+    this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
+    this.ctx.fillText('Press ESC to resume', this.width / 2, this.height / 2 + LAYOUT.pauseInstructionOffsetY);
 
     // Additional hint
-    this.ctx.fillStyle = '#666666';
-    this.ctx.font = `16px ${this.config.fontFamily}`;
-    this.ctx.fillText('Press Q to quit to menu', this.width / 2, this.height / 2 + 60);
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.pauseHint}px ${this.config.fontFamily}`;
+    this.ctx.fillText('Press Q to quit to menu', this.width / 2, this.height / 2 + LAYOUT.pauseHintOffsetY);
   }
 
   /**
@@ -117,48 +163,47 @@ export class UIRenderer {
     this.drawOverlayBackground();
 
     // GAME OVER text
-    this.ctx.fillStyle = '#ff4444';
-    this.ctx.font = `bold 48px ${this.config.fontFamily}`;
+    this.ctx.fillStyle = UI_COLORS.gameOverTitle;
+    this.ctx.font = `bold ${FONT_SIZES.gameOverTitle}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText('GAME OVER', this.width / 2, this.height / 4);
 
     // Stats
-    const statsY = this.height / 2 - 60;
+    const statsY = this.height / 2 + LAYOUT.statsOffsetY;
     this.ctx.fillStyle = this.config.textColor;
-    this.ctx.font = `24px ${this.config.fontFamily}`;
+    this.ctx.font = `${FONT_SIZES.gameOverScore}px ${this.config.fontFamily}`;
     this.ctx.fillText(`Score: ${stats.score.toLocaleString()}`, this.width / 2, statsY);
-    this.ctx.font = `20px ${this.config.fontFamily}`;
-    this.ctx.fillText(`Level: ${stats.level}`, this.width / 2, statsY + 35);
-    this.ctx.fillText(`Lines: ${stats.lines}`, this.width / 2, statsY + 65);
+    this.ctx.font = `${FONT_SIZES.gameOverStats}px ${this.config.fontFamily}`;
+    this.ctx.fillText(`Level: ${stats.level}`, this.width / 2, statsY + LAYOUT.statsLineSpacing);
+    this.ctx.fillText(`Lines: ${stats.lines}`, this.width / 2, statsY + LAYOUT.statsLineSpacing2);
 
     // Menu items
-    const menuY = this.height / 2 + 60;
-    const itemHeight = 45;
+    const menuY = this.height / 2 + LAYOUT.gameOverMenuOffsetY;
 
     items.forEach((item, index) => {
-      const y = menuY + index * itemHeight;
+      const y = menuY + index * LAYOUT.gameOverMenuItemHeight;
       const isSelected = index === selectedIndex;
 
       if (isSelected) {
         this.ctx.fillStyle = this.config.highlightColor;
-        this.ctx.font = `bold 22px ${this.config.fontFamily}`;
-        this.ctx.fillText('▶', this.width / 2 - 70, y);
+        this.ctx.font = `bold ${FONT_SIZES.gameOverMenuItem}px ${this.config.fontFamily}`;
+        this.ctx.fillText('▶', this.width / 2 - LAYOUT.gameOverSelectorOffsetX, y);
       }
 
       this.ctx.fillStyle = isSelected
         ? this.config.highlightColor
         : this.config.textColor;
       this.ctx.font = isSelected
-        ? `bold 22px ${this.config.fontFamily}`
-        : `22px ${this.config.fontFamily}`;
+        ? `bold ${FONT_SIZES.gameOverMenuItem}px ${this.config.fontFamily}`
+        : `${FONT_SIZES.gameOverMenuItem}px ${this.config.fontFamily}`;
       this.ctx.fillText(item.label, this.width / 2, y);
     });
 
     // Instructions
-    this.ctx.fillStyle = '#666666';
-    this.ctx.font = `14px ${this.config.fontFamily}`;
-    this.ctx.fillText('↑↓: 選択  Enter: 決定', this.width / 2, this.height - 40);
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.fillText('↑↓: 選択  Enter: 決定', this.width / 2, this.height - LAYOUT.instructionBottomMargin);
   }
 
   /**

@@ -87,6 +87,11 @@ export class GameManager {
 
   private playState: PlayState | null = null;
 
+  // Event listener references for cleanup
+  private readonly boundHandleVisibilityChange: () => void;
+  private readonly boundHandleWindowBlur: () => void;
+  private readonly boundHandleMenuKeyboard: (e: KeyboardEvent) => void;
+
   constructor(canvas: HTMLCanvasElement) {
     this.boardRenderer = new BoardRenderer(canvas);
     this.uiRenderer = new UIRenderer(
@@ -97,6 +102,11 @@ export class GameManager {
     this.gameLoop = new GameLoop();
     this.inputHandler = new InputHandler();
     this.announcer = document.getElementById('game-announcements');
+
+    // Bind event handlers for later cleanup
+    this.boundHandleVisibilityChange = this.handleVisibilityChange.bind(this);
+    this.boundHandleWindowBlur = this.handleWindowBlur.bind(this);
+    this.boundHandleMenuKeyboard = this.handleMenuKeyboard.bind(this);
 
     this.setupCallbacks();
     this.setupEventListeners();
@@ -109,6 +119,17 @@ export class GameManager {
     this.inputHandler.enable();
     this.gameLoop.start();
     this.startTransition('fade-in');
+  }
+
+  /**
+   * Stop and clean up the game manager to prevent memory leaks.
+   * Call this when the game is being unmounted or destroyed.
+   */
+  destroy(): void {
+    this.gameLoop.stop();
+    this.inputHandler.disable();
+    this.removeEventListeners();
+    this.playState = null;
   }
 
   /**
@@ -138,24 +159,38 @@ export class GameManager {
    * Setup DOM event listeners.
    */
   private setupEventListeners(): void {
-    // Auto-pause on visibility change
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.state === 'playing') {
-        this.pauseGame();
-      }
-      this.inputHandler.clearAllKeys();
-    });
+    document.addEventListener('visibilitychange', this.boundHandleVisibilityChange);
+    window.addEventListener('blur', this.boundHandleWindowBlur);
+    document.addEventListener('keydown', this.boundHandleMenuKeyboard);
+  }
 
-    // Auto-pause on window blur
-    window.addEventListener('blur', () => {
-      if (this.state === 'playing') {
-        this.pauseGame();
-      }
-      this.inputHandler.clearAllKeys();
-    });
+  /**
+   * Remove DOM event listeners to prevent memory leaks.
+   */
+  private removeEventListeners(): void {
+    document.removeEventListener('visibilitychange', this.boundHandleVisibilityChange);
+    window.removeEventListener('blur', this.boundHandleWindowBlur);
+    document.removeEventListener('keydown', this.boundHandleMenuKeyboard);
+  }
 
-    // Handle keyboard navigation for menus
-    document.addEventListener('keydown', (e) => this.handleMenuKeyboard(e));
+  /**
+   * Handle visibility change event (auto-pause when tab is hidden).
+   */
+  private handleVisibilityChange(): void {
+    if (document.hidden && this.state === 'playing') {
+      this.pauseGame();
+    }
+    this.inputHandler.clearAllKeys();
+  }
+
+  /**
+   * Handle window blur event (auto-pause when window loses focus).
+   */
+  private handleWindowBlur(): void {
+    if (this.state === 'playing') {
+      this.pauseGame();
+    }
+    this.inputHandler.clearAllKeys();
   }
 
   /**
@@ -363,11 +398,14 @@ export class GameManager {
   private updateTransition(deltaTime: number): void {
     if (!this.transition.active) return;
 
-    this.transition.progress += deltaTime / this.transition.duration;
+    // Clamp progress to prevent overflow on large delta times
+    this.transition.progress = Math.min(
+      1,
+      this.transition.progress + deltaTime / this.transition.duration
+    );
 
     if (this.transition.progress >= 1) {
       this.transition.active = false;
-      this.transition.progress = 1;
       this.transition.onComplete?.();
     }
   }
