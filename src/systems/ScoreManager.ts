@@ -185,7 +185,9 @@ export class ScoreManager {
    */
   get fallSpeed(): number {
     const index = Math.min(this._level - 1, FALL_SPEEDS.length - 1);
-    return FALL_SPEEDS[index] ?? FALL_SPEEDS[FALL_SPEEDS.length - 1]!;
+    const speed = FALL_SPEEDS[index];
+    // FALL_SPEEDS is guaranteed to have at least one element, and index is clamped
+    return speed !== undefined ? speed : 1000;
   }
 
   /**

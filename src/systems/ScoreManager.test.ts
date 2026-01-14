@@ -343,7 +343,11 @@ describe('ScoreManager', () => {
 
       // Each level should be faster (lower ms) than the previous
       for (let i = 1; i < speeds.length; i++) {
-        expect(speeds[i]).toBeLessThan(speeds[i - 1]!);
+        const current = speeds[i];
+        const previous = speeds[i - 1];
+        if (current !== undefined && previous !== undefined) {
+          expect(current).toBeLessThan(previous);
+        }
       }
     });
 
