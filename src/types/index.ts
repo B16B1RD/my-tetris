@@ -103,8 +103,28 @@ export type ScoreAction =
   | 'tspin-single'
   | 'tspin-double'
   | 'tspin-triple'
+  | 'tspin-mini-single'
+  | 'tspin-mini-double'
   | 'softdrop'
   | 'harddrop';
+
+/**
+ * T-Spin type for line clear results.
+ */
+export type TSpinType = 'none' | 'mini' | 'full';
+
+/**
+ * Result of a line clear operation.
+ * Includes information about T-Spins for scoring purposes.
+ */
+export interface LineClearResult {
+  /** Number of lines cleared (0-4) */
+  linesCleared: number;
+  /** Type of T-Spin (if any) */
+  tspinType: TSpinType;
+  /** Human-readable description of the clear */
+  description: string;
+}
 
 /**
  * Current game statistics and scoring state.

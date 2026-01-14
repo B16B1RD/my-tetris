@@ -1,10 +1,11 @@
 import './style.css';
-import type { InputAction } from './types/index.ts';
+import type { InputAction, LineClearResult, TSpinType } from './types/index.ts';
 import { DEFAULT_CONFIG } from './types/index.ts';
 import { Board } from './game/Board.ts';
 import { Tetromino } from './game/Tetromino.ts';
 import { Randomizer } from './game/Randomizer.ts';
-import { rotateClockwise, rotateCounterClockwise } from './game/SRS.ts';
+import { tryRotation } from './game/SRS.ts';
+import { detectTSpin, getTSpinDescription } from './game/TSpin.ts';
 import { BoardRenderer } from './rendering/BoardRenderer.ts';
 import { GameLoop } from './systems/GameLoop.ts';
 import { InputHandler } from './systems/InputHandler.ts';
@@ -54,6 +55,10 @@ interface DemoState {
   lockTimer: number;
   /** Whether the piece is currently on the ground */
   isGrounded: boolean;
+  /** Whether the last action was a rotation (for T-Spin detection) */
+  lastActionWasRotation: boolean;
+  /** Wall kick index from the last successful rotation */
+  lastKickIndex: number;
 }
 
 /**
@@ -77,6 +82,8 @@ function initDemo(canvas: HTMLCanvasElement): DemoState {
     dropInterval: 1000, // 1 second per drop
     lockTimer: DEFAULT_CONFIG.timing.lockDelay,
     isGrounded: false,
+    lastActionWasRotation: false,
+    lastKickIndex: 0,
   };
 }
 
@@ -89,6 +96,8 @@ function spawnTetromino(state: DemoState): void {
   state.dropTimer = 0;
   state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
   state.isGrounded = false;
+  state.lastActionWasRotation = false;
+  state.lastKickIndex = 0;
 }
 
 /**
@@ -114,6 +123,8 @@ function tryMove(state: DemoState, dx: number, dy: number): boolean {
     if (state.isGrounded && dy === 0) {
       state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
     }
+    // Moving clears the rotation flag for T-Spin detection
+    state.lastActionWasRotation = false;
     return true;
   }
 
@@ -131,8 +142,43 @@ function hardDrop(state: DemoState): void {
   const dropPosition = state.board.getTetrominoDropPosition(state.currentTetromino);
   state.currentTetromino.setPosition(dropPosition);
 
+  // Hard drop clears the rotation flag (T-Spin requires last action to be rotation)
+  state.lastActionWasRotation = false;
+
   // Lock immediately
   lockPiece(state);
+}
+
+/**
+ * Perform line clear with T-Spin detection
+ */
+function performLineClear(state: DemoState): LineClearResult {
+  if (!state.currentTetromino) {
+    return { linesCleared: 0, tspinType: 'none', description: '' };
+  }
+
+  // Detect T-Spin BEFORE locking the piece
+  const tspinResult = detectTSpin(
+    state.currentTetromino,
+    state.board,
+    state.lastActionWasRotation,
+    state.lastKickIndex
+  );
+
+  // Now lock the piece
+  state.board.lockTetromino(state.currentTetromino);
+
+  // Clear filled rows
+  const linesCleared = state.board.clearFilledRows();
+
+  // Get description
+  const description = getTSpinDescription(tspinResult.type, linesCleared);
+
+  return {
+    linesCleared,
+    tspinType: tspinResult.type as TSpinType,
+    description,
+  };
 }
 
 /**
@@ -141,13 +187,16 @@ function hardDrop(state: DemoState): void {
 function lockPiece(state: DemoState): void {
   if (!state.currentTetromino) return;
 
-  state.board.lockTetromino(state.currentTetromino);
+  // Perform line clear with T-Spin detection
+  const result = performLineClear(state);
 
-  // Clear filled rows
-  const cleared = state.board.clearFilledRows();
-  if (cleared > 0) {
-    console.log(`Cleared ${cleared} rows!`);
-    announce(`${cleared}ライン消去`);
+  // Log and announce the result
+  if (result.description) {
+    console.log(result.description);
+    announce(result.description);
+  } else if (result.linesCleared > 0) {
+    console.log(`Cleared ${result.linesCleared} rows!`);
+    announce(`${result.linesCleared}ライン消去`);
   }
 
   // Check for game over
@@ -187,22 +236,32 @@ function handleInput(state: DemoState, action: InputAction): void {
       hardDrop(state);
       break;
 
-    case 'rotateClockwise':
-      if (rotateClockwise(state.currentTetromino, state.board)) {
+    case 'rotateClockwise': {
+      const result = tryRotation(state.currentTetromino, state.board, 'clockwise');
+      if (result.success) {
+        // Track rotation for T-Spin detection
+        state.lastActionWasRotation = true;
+        state.lastKickIndex = result.kickIndex;
         // Reset lock timer on successful rotation if grounded
         if (state.isGrounded) {
           state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
         }
       }
       break;
+    }
 
-    case 'rotateCounterClockwise':
-      if (rotateCounterClockwise(state.currentTetromino, state.board)) {
+    case 'rotateCounterClockwise': {
+      const result = tryRotation(state.currentTetromino, state.board, 'counterClockwise');
+      if (result.success) {
+        // Track rotation for T-Spin detection
+        state.lastActionWasRotation = true;
+        state.lastKickIndex = result.kickIndex;
         if (state.isGrounded) {
           state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
         }
       }
       break;
+    }
 
     case 'hold':
       // Hold functionality not implemented yet
