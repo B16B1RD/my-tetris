@@ -32,6 +32,10 @@ const PANEL_CONFIG = {
   panelMargin: 10,
   /** Small cell size for preview pieces */
   previewCellSize: 16,
+  /** Height of label area in pixels */
+  labelAreaHeight: 30,
+  /** Font for panel labels */
+  labelFont: '12px monospace',
 } as const;
 
 /**
@@ -248,7 +252,7 @@ export class BoardRenderer extends Renderer {
     const panelX = this.boardOffsetX + this.boardWidth + PANEL_CONFIG.panelMargin;
     const panelY = this.boardOffsetY;
     const panelWidth = PANEL_CONFIG.panelWidthCells * PANEL_CONFIG.previewCellSize;
-    const panelHeight = nextPieces.length * PANEL_CONFIG.previewItemHeight * PANEL_CONFIG.previewCellSize + 30;
+    const panelHeight = nextPieces.length * PANEL_CONFIG.previewItemHeight * PANEL_CONFIG.previewCellSize + PANEL_CONFIG.labelAreaHeight;
 
     // Draw panel background
     this.ctx.fillStyle = COLORS.panelBackground;
@@ -261,7 +265,7 @@ export class BoardRenderer extends Renderer {
 
     // Draw "NEXT" label
     this.ctx.fillStyle = COLORS.labelText;
-    this.ctx.font = '12px monospace';
+    this.ctx.font = PANEL_CONFIG.labelFont;
     this.ctx.textAlign = 'center';
     this.ctx.fillText('NEXT', panelX + panelWidth / 2, panelY + 12);
 
@@ -282,7 +286,7 @@ export class BoardRenderer extends Renderer {
    */
   renderHoldPanel(heldPiece: TetrominoType | null, holdUsed: boolean): void {
     const panelWidth = PANEL_CONFIG.panelWidthCells * PANEL_CONFIG.previewCellSize;
-    const panelHeight = PANEL_CONFIG.previewItemHeight * PANEL_CONFIG.previewCellSize + 30;
+    const panelHeight = PANEL_CONFIG.previewItemHeight * PANEL_CONFIG.previewCellSize + PANEL_CONFIG.labelAreaHeight;
     const panelX = this.boardOffsetX - panelWidth - PANEL_CONFIG.panelMargin;
     const panelY = this.boardOffsetY;
 
@@ -297,7 +301,7 @@ export class BoardRenderer extends Renderer {
 
     // Draw "HOLD" label
     this.ctx.fillStyle = holdUsed ? COLORS.holdDisabled : COLORS.labelText;
-    this.ctx.font = '12px monospace';
+    this.ctx.font = PANEL_CONFIG.labelFont;
     this.ctx.textAlign = 'center';
     this.ctx.fillText('HOLD', panelX + panelWidth / 2, panelY + 12);
 

@@ -99,16 +99,23 @@ function initDemo(canvas: HTMLCanvasElement): DemoState {
 }
 
 /**
- * Spawn a new tetromino
+ * Reset spawn-related state (shared logic for spawning pieces)
  */
-function spawnTetromino(state: DemoState): void {
-  const type = state.randomizer.next();
+function resetSpawnState(state: DemoState, type: TetrominoType): void {
   state.currentTetromino = new Tetromino(type, { x: 3, y: 0 });
   state.dropTimer = 0;
   state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
   state.isGrounded = false;
   state.lastActionWasRotation = false;
   state.lastKickIndex = 0;
+}
+
+/**
+ * Spawn a new tetromino from the randomizer
+ */
+function spawnTetromino(state: DemoState): void {
+  const type = state.randomizer.next();
+  resetSpawnState(state, type);
   state.hold.holdUsed = false; // Reset hold availability on new piece
 }
 
@@ -116,12 +123,7 @@ function spawnTetromino(state: DemoState): void {
  * Spawn a tetromino of a specific type (used for hold swap)
  */
 function spawnTetrominoOfType(state: DemoState, type: TetrominoType): void {
-  state.currentTetromino = new Tetromino(type, { x: 3, y: 0 });
-  state.dropTimer = 0;
-  state.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
-  state.isGrounded = false;
-  state.lastActionWasRotation = false;
-  state.lastKickIndex = 0;
+  resetSpawnState(state, type);
 }
 
 /**
@@ -268,16 +270,19 @@ function performHold(state: DemoState): void {
   const currentType = state.currentTetromino.type;
 
   if (state.hold.heldPiece === null) {
-    // First hold: store current piece and spawn new one
+    // First hold: store current piece and spawn new one from randomizer
+    // Note: spawnTetromino resets holdUsed to false, but we set it true below
     state.hold.heldPiece = currentType;
     spawnTetromino(state);
   } else {
     // Swap: store current piece and spawn held piece
+    // Note: spawnTetrominoOfType does NOT reset holdUsed (intentional)
     const heldType = state.hold.heldPiece;
     state.hold.heldPiece = currentType;
     spawnTetrominoOfType(state, heldType);
   }
 
+  // Mark hold as used for this piece (overrides any reset from spawnTetromino)
   state.hold.holdUsed = true;
   announce('Hold');
 }
