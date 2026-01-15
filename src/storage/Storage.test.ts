@@ -1072,6 +1072,10 @@ describe('Statistics Storage', () => {
     });
 
     it('should handle negative inputs safely', () => {
+      // updateStatistics uses Math.max(0, value) for playTime, lines, tetris, tspin
+      // to ensure negative values don't corrupt statistics. However, gamesPlayed
+      // always increments by 1 per call regardless of input values, as it counts
+      // the number of game sessions completed (not a user-provided value).
       storage.updateStatistics(-100, -10, -1, -5, -1);
 
       const stats = storage.getStatistics();
@@ -1079,7 +1083,7 @@ describe('Statistics Storage', () => {
       expect(stats.totalLinesCleared).toBe(0);
       expect(stats.totalTetris).toBe(0);
       expect(stats.totalTSpins).toBe(0);
-      expect(stats.gamesPlayed).toBe(1); // gamesPlayed always increments
+      expect(stats.gamesPlayed).toBe(1); // Always increments: counts sessions, not user input
     });
 
     it('should handle zero level correctly', () => {
@@ -1087,6 +1091,20 @@ describe('Statistics Storage', () => {
 
       const stats = storage.getStatistics();
       expect(stats.highestLevel).toBe(0); // max(0, 0) = 0
+    });
+
+    it('should maintain highestLevel when lower level is provided', () => {
+      // First game reaches level 15
+      storage.updateStatistics(1000, 10, 1, 15, 1);
+      expect(storage.getStatistics().highestLevel).toBe(15);
+
+      // Second game only reaches level 5 - highestLevel should remain 15
+      storage.updateStatistics(2000, 20, 2, 5, 2);
+      expect(storage.getStatistics().highestLevel).toBe(15);
+
+      // Third game reaches level 20 - highestLevel should update to 20
+      storage.updateStatistics(3000, 30, 3, 20, 3);
+      expect(storage.getStatistics().highestLevel).toBe(20);
     });
 
     it('should handle very large play time', () => {

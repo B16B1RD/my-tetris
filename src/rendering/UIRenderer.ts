@@ -145,7 +145,9 @@ const LAYOUT = {
 
 /** Colors for UI elements */
 const UI_COLORS = {
-  hintText: '#666666',
+  // hintText: '#888888' provides ~5.3:1 contrast ratio against rgba(0,0,0,0.85) background,
+  // meeting WCAG AA standard (4.5:1 minimum for normal text)
+  hintText: '#888888',
   gameOverTitle: '#ff4444',
   rankingNew: '#ffdd00',
   rankingHeader: '#888888',
@@ -790,6 +792,9 @@ export class UIRenderer {
     // Reset data option
     if (showResetConfirm) {
       // Reset confirmation dialog - centered using relative coordinates
+      // Note: This is a Canvas-based modal, so DOM focus management is not applicable.
+      // Keyboard input is restricted in GameManager.handleStatisticsNavigation() to only
+      // allow Enter/Escape during confirmation mode, effectively trapping user interaction.
       const dialogWidth = this.width - 80;
       const dialogHeight = 200;
       const dialogX = (this.width - dialogWidth) / 2;

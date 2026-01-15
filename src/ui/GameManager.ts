@@ -520,7 +520,9 @@ export class GameManager {
    */
   private handleStatisticsNavigation(e: KeyboardEvent): void {
     if (this.statisticsResetConfirm) {
-      // Reset confirmation mode
+      // Reset confirmation mode - only Enter and Escape are handled.
+      // All other keys (including R) are intentionally ignored to prevent
+      // accidental re-triggering or unintended actions during confirmation.
       if (e.key === 'Enter') {
         e.preventDefault();
         this.storage.clearAllData();

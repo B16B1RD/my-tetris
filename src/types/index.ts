@@ -87,7 +87,17 @@ export interface ActiveTetromino {
 /**
  * Possible states of the game.
  */
-export type GameState = 'menu' | 'playing' | 'paused' | 'gameover' | 'name-input' | 'ranking' | 'replay-select' | 'replay' | 'settings' | 'statistics';
+export type GameState =
+  | 'menu'
+  | 'playing'
+  | 'paused'
+  | 'gameover'
+  | 'name-input'
+  | 'ranking'
+  | 'replay-select'
+  | 'replay'
+  | 'settings'
+  | 'statistics';
 
 /**
  * Menu item options for navigation.
