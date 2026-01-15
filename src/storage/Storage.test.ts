@@ -546,6 +546,78 @@ describe('Storage', () => {
       });
     });
 
+    describe('QuotaExceededError handling for replays', () => {
+      it('should attempt recovery when QuotaExceededError occurs', () => {
+        let callCount = 0;
+        const originalLocalStorage = globalThis.localStorage;
+        const originalSetItem = originalLocalStorage.setItem.bind(originalLocalStorage);
+
+        const mockLocalStorage = {
+          ...originalLocalStorage,
+          getItem: originalLocalStorage.getItem.bind(originalLocalStorage),
+          setItem: (key: string, value: string): void => {
+            callCount++;
+            if (callCount === 1) {
+              const error = new DOMException('Quota exceeded', 'QuotaExceededError');
+              throw error;
+            }
+            originalSetItem(key, value);
+          },
+          removeItem: originalLocalStorage.removeItem.bind(originalLocalStorage),
+          clear: originalLocalStorage.clear.bind(originalLocalStorage),
+          key: originalLocalStorage.key.bind(originalLocalStorage),
+          length: originalLocalStorage.length,
+        };
+        Object.defineProperty(globalThis, 'localStorage', {
+          value: mockLocalStorage,
+          configurable: true,
+        });
+
+        try {
+          const testStorage = new Storage();
+          const result = testStorage.saveReplay(createTestReplay('r1', 1000));
+          expect(result).toBe(true);
+          expect(callCount).toBe(2);
+        } finally {
+          Object.defineProperty(globalThis, 'localStorage', {
+            value: originalLocalStorage,
+            configurable: true,
+          });
+        }
+      });
+
+      it('should return false when QuotaExceededError recovery also fails', () => {
+        const originalLocalStorage = globalThis.localStorage;
+        const mockLocalStorage = {
+          ...originalLocalStorage,
+          getItem: originalLocalStorage.getItem.bind(originalLocalStorage),
+          setItem: (): void => {
+            const error = new DOMException('Quota exceeded', 'QuotaExceededError');
+            throw error;
+          },
+          removeItem: originalLocalStorage.removeItem.bind(originalLocalStorage),
+          clear: originalLocalStorage.clear.bind(originalLocalStorage),
+          key: originalLocalStorage.key.bind(originalLocalStorage),
+          length: originalLocalStorage.length,
+        };
+        Object.defineProperty(globalThis, 'localStorage', {
+          value: mockLocalStorage,
+          configurable: true,
+        });
+
+        try {
+          const testStorage = new Storage();
+          const result = testStorage.saveReplay(createTestReplay('r1', 1000));
+          expect(result).toBe(false);
+        } finally {
+          Object.defineProperty(globalThis, 'localStorage', {
+            value: originalLocalStorage,
+            configurable: true,
+          });
+        }
+      });
+    });
+
     describe('replay data validation', () => {
       it('should handle invalid JSON in localStorage', () => {
         localStorage.setItem('tetris_replays', 'invalid json');

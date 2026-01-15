@@ -436,7 +436,7 @@ export class UIRenderer {
       // No replays message
       this.ctx.fillStyle = UI_COLORS.hintText;
       this.ctx.font = `${FONT_SIZES.replayEntry}px ${this.config.fontFamily}`;
-      this.ctx.fillText('No replays available', this.width / 2, LAYOUT.replayEmptyY);
+      this.ctx.fillText('リプレイがありません', this.width / 2, LAYOUT.replayEmptyY);
     } else {
       // Replay entries
       for (let i = 0; i < replays.length; i++) {
@@ -491,7 +491,7 @@ export class UIRenderer {
     this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'center';
     this.ctx.fillText(
-      'Up/Down: Select  Enter: Play  Esc: Back',
+      '↑↓: 選択  Enter: 再生  Esc: 戻る',
       this.width / 2,
       this.height - LAYOUT.instructionBottomMargin
     );
@@ -552,7 +552,7 @@ export class UIRenderer {
     this.ctx.fillStyle = UI_COLORS.hintText;
     this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'right';
-    this.ctx.fillText('Space: Play/Pause  Left/Right: Speed  Esc: Exit', this.width - padding, bottomY + 15);
+    this.ctx.fillText('Space: 再生/一時停止  ←→: 速度  Esc: 終了', this.width - padding, bottomY + 15);
   }
 
   /**
@@ -569,7 +569,7 @@ export class UIRenderer {
 
     this.ctx.fillStyle = this.config.textColor;
     this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
-    this.ctx.fillText('Press any key to continue', this.width / 2, this.height / 2 + 30);
+    this.ctx.fillText('何かキーを押して続ける', this.width / 2, this.height / 2 + 30);
   }
 
   /**
