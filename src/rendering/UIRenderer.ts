@@ -666,19 +666,19 @@ export class UIRenderer {
     this.ctx.font = `${FONT_SIZES.rankingHeader}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'left';
     const headerY = LAYOUT.settingsTableY;
-    this.ctx.fillText('ACTION', LAYOUT.settingsLabelX, headerY);
-    this.ctx.fillText('KEY', LAYOUT.settingsKeyX, headerY);
+    this.ctx.fillText('操作', LAYOUT.settingsLabelX, headerY);
+    this.ctx.fillText('キー', LAYOUT.settingsKeyX, headerY);
 
-    // Key binding entries
+    // Key binding entries (Japanese labels for consistency with other UI text)
     const actions: { label: string; action: keyof KeyBindings }[] = [
-      { label: 'Move Left', action: 'moveLeft' },
-      { label: 'Move Right', action: 'moveRight' },
-      { label: 'Soft Drop', action: 'softDrop' },
-      { label: 'Hard Drop', action: 'hardDrop' },
-      { label: 'Rotate CW', action: 'rotateClockwise' },
-      { label: 'Rotate CCW', action: 'rotateCounterClockwise' },
-      { label: 'Hold', action: 'hold' },
-      { label: 'Pause', action: 'pause' },
+      { label: '左移動', action: 'moveLeft' },
+      { label: '右移動', action: 'moveRight' },
+      { label: 'ソフトドロップ', action: 'softDrop' },
+      { label: 'ハードドロップ', action: 'hardDrop' },
+      { label: '右回転', action: 'rotateClockwise' },
+      { label: '左回転', action: 'rotateCounterClockwise' },
+      { label: 'ホールド', action: 'hold' },
+      { label: '一時停止', action: 'pause' },
     ];
 
     actions.forEach((item, index) => {
@@ -707,6 +707,7 @@ export class UIRenderer {
     });
 
     // Note about future expansion
+    // TODO: Remove this message when key binding customization is implemented
     this.ctx.fillStyle = UI_COLORS.hintText;
     this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'center';
@@ -786,32 +787,37 @@ export class UIRenderer {
 
     // Reset data option
     if (showResetConfirm) {
-      // Reset confirmation dialog
+      // Reset confirmation dialog - centered using relative coordinates
+      const dialogWidth = this.width - 80;
+      const dialogHeight = 200;
+      const dialogX = (this.width - dialogWidth) / 2;
+      const dialogY = (this.height - dialogHeight) / 2;
+
       this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-      this.ctx.fillRect(40, 200, this.width - 80, 200);
+      this.ctx.fillRect(dialogX, dialogY, dialogWidth, dialogHeight);
 
       this.ctx.fillStyle = UI_COLORS.resetWarning;
       this.ctx.font = `bold ${FONT_SIZES.nameInputTitle}px ${this.config.fontFamily}`;
       this.ctx.textAlign = 'center';
-      this.ctx.fillText('RESET ALL DATA?', this.width / 2, 260);
+      this.ctx.fillText('データをリセットしますか?', this.width / 2, dialogY + 60);
 
       this.ctx.fillStyle = this.config.textColor;
       this.ctx.font = `${FONT_SIZES.settingsLabel}px ${this.config.fontFamily}`;
       this.ctx.fillText(
-        'This will delete all scores, replays, and statistics.',
+        'スコア、リプレイ、統計データがすべて削除されます',
         this.width / 2,
-        310
+        dialogY + 110
       );
 
       this.ctx.fillStyle = UI_COLORS.hintText;
       this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
-      this.ctx.fillText('Enter: Confirm  Esc: Cancel', this.width / 2, 360);
+      this.ctx.fillText('Enter: 確定  Esc: キャンセル', this.width / 2, dialogY + 160);
     } else {
       // Reset hint
       this.ctx.fillStyle = UI_COLORS.hintText;
       this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
       this.ctx.textAlign = 'center';
-      this.ctx.fillText('R: Reset All Data', this.width / 2, LAYOUT.statisticsResetY);
+      this.ctx.fillText('R: データをリセット', this.width / 2, LAYOUT.statisticsResetY);
 
       // Instructions
       this.ctx.fillText('Esc: 戻る', this.width / 2, this.height - LAYOUT.instructionBottomMargin);
@@ -845,7 +851,8 @@ export class UIRenderer {
       return '0%';
     }
     const linesFromTetris = tetrisCount * 4;
-    const rate = (linesFromTetris / totalLines) * 100;
+    // Clamp to 100% max in case of data inconsistency
+    const rate = Math.min((linesFromTetris / totalLines) * 100, 100);
     return `${rate.toFixed(1)}%`;
   }
 

@@ -526,10 +526,11 @@ export class GameManager {
         this.storage.clearAllData();
         this.statisticsCache = this.storage.getStatistics();
         this.statisticsResetConfirm = false;
-        this.announce('All data has been reset');
+        this.announce('すべてのデータがリセットされました');
       } else if (e.key === 'Escape') {
         e.preventDefault();
         this.statisticsResetConfirm = false;
+        this.announce('キャンセル');
       }
     } else {
       // Normal mode
@@ -539,6 +540,7 @@ export class GameManager {
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         this.statisticsResetConfirm = true;
+        this.announce('警告: すべてのデータをリセットしますか? Enter で確定、Escape でキャンセル');
       }
     }
   }
