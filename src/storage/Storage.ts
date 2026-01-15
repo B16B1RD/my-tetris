@@ -21,6 +21,18 @@ export const MAX_REPLAYS = 5;
 /** Default player name */
 const DEFAULT_PLAYER_NAME = 'AAA';
 
+/** Valid input actions for replay validation */
+const VALID_INPUT_ACTIONS: readonly InputAction[] = [
+  'moveLeft',
+  'moveRight',
+  'softDrop',
+  'hardDrop',
+  'rotateClockwise',
+  'rotateCounterClockwise',
+  'hold',
+  'pause',
+] as const;
+
 /**
  * Storage manager for persisting game data to localStorage.
  * Handles high score management with automatic sorting and size limits.
@@ -278,20 +290,10 @@ export class Storage {
       return false;
     }
     const obj = event as Record<string, unknown>;
-    const validActions: InputAction[] = [
-      'moveLeft',
-      'moveRight',
-      'softDrop',
-      'hardDrop',
-      'rotateClockwise',
-      'rotateCounterClockwise',
-      'hold',
-      'pause',
-    ];
     return (
       typeof obj.timestamp === 'number' &&
       typeof obj.action === 'string' &&
-      validActions.includes(obj.action as InputAction) &&
+      VALID_INPUT_ACTIONS.includes(obj.action as InputAction) &&
       Number.isFinite(obj.timestamp)
     );
   }

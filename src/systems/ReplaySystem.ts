@@ -126,9 +126,10 @@ export class ReplaySystem {
 
   /**
    * Update playback state and return any triggered events.
-   * @param state - Current playback state
+   * @param state - Current playback state (mutated by this method)
    * @param deltaTime - Time elapsed since last update (ms)
    * @returns Array of input actions triggered during this update
+   * @mutates state - Updates currentTime, nextEventIndex, and finished properties
    */
   static updatePlayback(
     state: ReplayPlaybackState,
@@ -168,6 +169,7 @@ export class ReplaySystem {
    * Set playback speed.
    * @param state - Playback state to modify
    * @param speed - New playback speed
+   * @mutates state - Updates speed property
    */
   static setSpeed(state: ReplayPlaybackState, speed: ReplaySpeed): void {
     state.speed = speed;
@@ -176,6 +178,7 @@ export class ReplaySystem {
   /**
    * Pause playback.
    * @param state - Playback state to modify
+   * @mutates state - Sets paused to true
    */
   static pause(state: ReplayPlaybackState): void {
     state.paused = true;
@@ -184,6 +187,7 @@ export class ReplaySystem {
   /**
    * Resume playback.
    * @param state - Playback state to modify
+   * @mutates state - Sets paused to false
    */
   static resume(state: ReplayPlaybackState): void {
     state.paused = false;
@@ -192,6 +196,7 @@ export class ReplaySystem {
   /**
    * Toggle pause state.
    * @param state - Playback state to modify
+   * @mutates state - Toggles paused property
    */
   static togglePause(state: ReplayPlaybackState): void {
     state.paused = !state.paused;
