@@ -12,6 +12,9 @@ import type {
   ReplaySpeed,
 } from '../types/index.ts';
 
+/** Default playback speed for new replay sessions */
+const DEFAULT_REPLAY_SPEED: ReplaySpeed = 1;
+
 /**
  * Generates a unique ID for replay data.
  * Uses crypto.randomUUID() for cryptographically secure unique IDs.
@@ -120,7 +123,7 @@ export class ReplaySystem {
       currentTime: 0,
       nextEventIndex: 0,
       paused: false,
-      speed: 1,
+      speed: DEFAULT_REPLAY_SPEED,
       finished: false,
     };
   }

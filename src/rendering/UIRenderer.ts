@@ -473,6 +473,8 @@ export class UIRenderer {
         const isSelected = i === selectedIndex;
 
         // Background highlight for selected
+        // Note: Width calculation intentionally uses different padding values to create
+        // a visual indent effect (left: replayListPaddingX, right: replayListItemPaddingX)
         if (isSelected) {
           this.ctx.fillStyle = UI_COLORS.replaySelectHighlight;
           this.ctx.fillRect(

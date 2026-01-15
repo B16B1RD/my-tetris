@@ -60,6 +60,7 @@ const GAME_OVER_MENU_ITEMS: MenuItem[] = [
 
 /**
  * Available replay playback speeds.
+ * Note: Must be kept in sync with ReplaySpeed type in types/index.ts.
  */
 const REPLAY_SPEEDS: ReplaySpeed[] = [0.5, 1, 2];
 

@@ -249,7 +249,9 @@ export interface ReplayData {
 }
 
 /**
- * Replay playback speed options.
+ * Available replay playback speeds.
+ * Note: GameManager.ts defines REPLAY_SPEEDS array with these same values.
+ * If adding new speeds, update both this type and REPLAY_SPEEDS array.
  */
 export type ReplaySpeed = 0.5 | 1 | 2;
 

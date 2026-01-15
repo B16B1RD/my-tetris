@@ -255,5 +255,27 @@ describe('ReplaySystem', () => {
       const actions2 = ReplaySystem.updatePlayback(state, 100);
       expect(actions2).toEqual(['moveLeft']);
     });
+
+    it('should support 2x speed', () => {
+      const mockReplay: ReplayData = {
+        id: 'test',
+        seed: 0,
+        events: [
+          { timestamp: 100, action: 'moveLeft' },
+          { timestamp: 200, action: 'moveRight' },
+        ],
+        finalScore: 0,
+        finalLevel: 1,
+        finalLines: 0,
+        date: new Date().toISOString(),
+        duration: 1000,
+      };
+      const state = ReplaySystem.createPlaybackState(mockReplay);
+      ReplaySystem.setSpeed(state, 2);
+
+      // At 2x speed, 100ms real time = 200ms game time
+      const actions = ReplaySystem.updatePlayback(state, 100);
+      expect(actions).toEqual(['moveLeft', 'moveRight']);
+    });
   });
 });

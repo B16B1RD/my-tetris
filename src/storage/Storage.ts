@@ -21,7 +21,11 @@ export const MAX_REPLAYS = 5;
 /** Default player name */
 const DEFAULT_PLAYER_NAME = 'AAA';
 
-/** Valid input actions for replay validation */
+/**
+ * Valid input actions for replay validation.
+ * Must be kept in sync with InputAction type defined in types/index.ts.
+ * This array is used for runtime validation of replay data loaded from localStorage.
+ */
 const VALID_INPUT_ACTIONS: readonly InputAction[] = [
   'moveLeft',
   'moveRight',
