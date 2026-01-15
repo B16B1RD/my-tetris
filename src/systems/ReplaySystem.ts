@@ -139,7 +139,8 @@ export class ReplaySystem {
     state: ReplayPlaybackState,
     deltaTime: number
   ): InputAction[] {
-    if (state.paused || state.finished) {
+    // Ignore negative deltaTime (invalid input)
+    if (state.paused || state.finished || deltaTime < 0) {
       return [];
     }
 

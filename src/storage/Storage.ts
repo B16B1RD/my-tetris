@@ -270,6 +270,7 @@ export class Storage {
     const obj = entry as Record<string, unknown>;
     return (
       typeof obj.id === 'string' &&
+      obj.id.length > 0 && // Empty ID check
       typeof obj.seed === 'number' &&
       Array.isArray(obj.events) &&
       obj.events.every((e) => this.isValidReplayEvent(e)) &&
@@ -277,6 +278,7 @@ export class Storage {
       typeof obj.finalLevel === 'number' &&
       typeof obj.finalLines === 'number' &&
       typeof obj.date === 'string' &&
+      this.isValidDateString(obj.date) && // Date format validation
       typeof obj.duration === 'number' &&
       Number.isFinite(obj.seed) &&
       Number.isFinite(obj.finalScore) &&
@@ -288,6 +290,14 @@ export class Storage {
       obj.finalLines >= 0 &&
       obj.duration >= 0
     );
+  }
+
+  /**
+   * Validate that a string is a valid ISO 8601 date format.
+   */
+  private isValidDateString(date: string): boolean {
+    const timestamp = Date.parse(date);
+    return !Number.isNaN(timestamp);
   }
 
   /**

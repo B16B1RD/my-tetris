@@ -615,8 +615,9 @@ export class GameManager {
     const currentIndex = REPLAY_SPEEDS.indexOf(this.replayPlayback.speed);
     const newIndex = Math.max(0, Math.min(REPLAY_SPEEDS.length - 1, currentIndex + direction));
     const newSpeed = REPLAY_SPEEDS[newIndex];
-    if (newSpeed !== undefined) {
+    if (newSpeed !== undefined && newSpeed !== this.replayPlayback.speed) {
       ReplaySystem.setSpeed(this.replayPlayback, newSpeed);
+      this.announce(`再生速度 ${newSpeed}倍`);
     }
   }
 

@@ -142,6 +142,19 @@ describe('ReplaySystem', () => {
       expect(playbackState.currentTime).toBe(0);
     });
 
+    it('should ignore negative deltaTime', () => {
+      // First advance to 150ms
+      ReplaySystem.updatePlayback(playbackState, 150);
+      expect(playbackState.currentTime).toBe(150);
+      expect(playbackState.nextEventIndex).toBe(1);
+
+      // Negative deltaTime should be ignored (no change)
+      const actions = ReplaySystem.updatePlayback(playbackState, -100);
+      expect(actions).toEqual([]);
+      expect(playbackState.currentTime).toBe(150); // Should not change
+      expect(playbackState.nextEventIndex).toBe(1); // Should not change
+    });
+
     it('should resume playback', () => {
       ReplaySystem.pause(playbackState);
       ReplaySystem.resume(playbackState);
