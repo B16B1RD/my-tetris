@@ -44,6 +44,10 @@ export class ReplaySystem {
 
   /**
    * Start recording a new game session.
+   *
+   * Note: If already recording, this will silently reset and start a new recording.
+   * This is intentional to simplify the API - callers don't need to check recording state.
+   *
    * @param seed - The random seed used for piece generation
    */
   startRecording(seed: number): void {
@@ -66,6 +70,10 @@ export class ReplaySystem {
 
   /**
    * Stop recording and generate replay data.
+   *
+   * Note: Uses individual parameters instead of an object for simplicity.
+   * Consider refactoring to object parameter if more metadata fields are added.
+   *
    * @param finalScore - Final score achieved
    * @param finalLevel - Final level reached
    * @param finalLines - Total lines cleared

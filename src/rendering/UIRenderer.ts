@@ -99,7 +99,11 @@ const LAYOUT = {
   replayHudBottomBarHeight: 30,
   replayHudTopTextY: 18,
   replayHudProgressBarX: 120,
-  /** Replay select screen item layout */
+  /**
+   * Replay select screen item layout.
+   * Note: replayListPaddingX is left padding, replayListItemPaddingX is right padding
+   * for the highlight background. Different values create a visual indent effect.
+   */
   replayListPaddingX: 20,
   replayListItemPaddingX: 40,
   replaySelectorX: 30,
@@ -498,7 +502,7 @@ export class UIRenderer {
           : `${FONT_SIZES.replayEntry}px ${this.config.fontFamily}`;
         this.ctx.textAlign = 'left';
 
-        // Date (formatted)
+        // Date (formatted) - year omitted as MAX_REPLAYS=5 keeps only recent replays
         const date = new Date(replay.date);
         const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
         this.ctx.fillText(dateStr, LAYOUT.replayDateX, y);

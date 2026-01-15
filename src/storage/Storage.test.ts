@@ -851,14 +851,24 @@ function createTestEntry(name: string, score: number): HighScoreEntry {
 
 /**
  * Helper to create test replay data.
+ * @param id - Replay identifier
+ * @param score - Final score (also used to derive finalLevel and finalLines)
+ * @param date - Optional ISO date string
+ * @param seed - Optional seed value (defaults to 12345)
+ *
  * Note: finalLevel uses `Math.floor(score / 1000) || 1` to ensure minimum level of 1.
  * This means scores 0-999 all result in level 1, which differs from actual game logic
  * but is acceptable for testing purposes.
  */
-function createTestReplay(id: string, score: number, date?: string): ReplayData {
+function createTestReplay(
+  id: string,
+  score: number,
+  date?: string,
+  seed = 12345
+): ReplayData {
   return {
     id,
-    seed: 12345,
+    seed,
     events: [
       { timestamp: 100, action: 'moveLeft' },
       { timestamp: 200, action: 'hardDrop' },
