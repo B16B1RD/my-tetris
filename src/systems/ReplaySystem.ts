@@ -14,9 +14,10 @@ import type {
 
 /**
  * Generates a unique ID for replay data.
+ * Uses crypto.randomUUID() for cryptographically secure unique IDs.
  */
 function generateReplayId(): string {
-  return `replay_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  return `replay_${crypto.randomUUID()}`;
 }
 
 /**

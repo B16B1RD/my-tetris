@@ -107,6 +107,13 @@ const LAYOUT = {
   replayScoreOffsetX: 120,
   replayDurationOffsetX: 30,
   replayLevelInfoOffsetY: 18,
+  /** Replay HUD bottom text Y offset from bottomY */
+  replayHudBottomTextY: 15,
+  /** Replay HUD progress bar Y offset from bottomY */
+  replayHudProgressBarY: 12,
+  /** Replay finished screen layout */
+  replayFinishedTitleOffsetY: -20,
+  replayFinishedTextOffsetY: 30,
 } as const;
 
 /** Colors for UI elements */
@@ -119,6 +126,7 @@ const UI_COLORS = {
   replayProgress: '#00ffff',
   replayProgressBg: '#333333',
   replayPaused: '#ffaa00',
+  replaySelectHighlight: 'rgba(0, 255, 255, 0.1)',
 } as const;
 
 /**
@@ -132,6 +140,8 @@ export class UIRenderer {
   private readonly config: UIOverlayConfig;
   /** Cached width of "AAA" text for name input cursor positioning */
   private nameInputTextWidth: number | null = null;
+  /** Cached character width for name input (monospace assumption for cursor positioning) */
+  private nameInputCharWidth: number | null = null;
 
   constructor(
     ctx: CanvasRenderingContext2D,
@@ -408,7 +418,11 @@ export class UIRenderer {
 
     // Blinking cursor
     if (showCursor && currentName.length < 3) {
-      const cursorX = nameX + this.ctx.measureText(currentName).width;
+      // Cache character width to avoid measureText per frame
+      if (this.nameInputCharWidth === null) {
+        this.nameInputCharWidth = this.ctx.measureText('A').width;
+      }
+      const cursorX = nameX + this.nameInputCharWidth * currentName.length;
       this.ctx.fillStyle = UI_COLORS.nameInputCursor;
       this.ctx.fillRect(
         cursorX,
@@ -460,7 +474,7 @@ export class UIRenderer {
 
         // Background highlight for selected
         if (isSelected) {
-          this.ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+          this.ctx.fillStyle = UI_COLORS.replaySelectHighlight;
           this.ctx.fillRect(
             LAYOUT.replayListPaddingX,
             y - 20,
@@ -561,12 +575,12 @@ export class UIRenderer {
     this.ctx.fillStyle = this.config.textColor;
     this.ctx.font = `${FONT_SIZES.replayHud}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'left';
-    this.ctx.fillText(`${currentTimeStr} / ${totalTimeStr}`, padding, bottomY + 15);
+    this.ctx.fillText(`${currentTimeStr} / ${totalTimeStr}`, padding, bottomY + LAYOUT.replayHudBottomTextY);
 
     // Progress bar
     const barX = LAYOUT.replayHudProgressBarX;
     const barWidth = LAYOUT.replayHudBarWidth;
-    const barY = bottomY + 12;
+    const barY = bottomY + LAYOUT.replayHudProgressBarY;
 
     // Background
     this.ctx.fillStyle = UI_COLORS.replayProgressBg;
@@ -581,7 +595,7 @@ export class UIRenderer {
     this.ctx.fillStyle = UI_COLORS.hintText;
     this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'right';
-    this.ctx.fillText('Space: 再生/一時停止  ←→: 速度  Esc: 終了', this.width - padding, bottomY + 15);
+    this.ctx.fillText('Space: 再生/一時停止  ←→: 速度  Esc: 終了', this.width - padding, bottomY + LAYOUT.replayHudBottomTextY);
   }
 
   /**
@@ -594,11 +608,11 @@ export class UIRenderer {
     this.ctx.font = `bold ${FONT_SIZES.pauseTitle}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'center';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText('REPLAY FINISHED', this.width / 2, this.height / 2 - 20);
+    this.ctx.fillText('REPLAY FINISHED', this.width / 2, this.height / 2 + LAYOUT.replayFinishedTitleOffsetY);
 
     this.ctx.fillStyle = this.config.textColor;
     this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
-    this.ctx.fillText('何かキーを押して続ける', this.width / 2, this.height / 2 + 30);
+    this.ctx.fillText('何かキーを押して続ける', this.width / 2, this.height / 2 + LAYOUT.replayFinishedTextOffsetY);
   }
 
   /**

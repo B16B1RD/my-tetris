@@ -59,6 +59,11 @@ const GAME_OVER_MENU_ITEMS: MenuItem[] = [
 ];
 
 /**
+ * Available replay playback speeds.
+ */
+const REPLAY_SPEEDS: ReplaySpeed[] = [0.5, 1, 2];
+
+/**
  * Internal game state during play.
  */
 interface PlayState {
@@ -148,6 +153,11 @@ export class GameManager {
     this.inputHandler = new InputHandler();
     this.storage = getStorage();
     this.announcer = document.getElementById('game-announcements');
+    if (!this.announcer) {
+      console.warn(
+        'GameManager: #game-announcements element not found. Screen reader announcements will be disabled.'
+      );
+    }
     this.replaySystem = new ReplaySystem();
 
     // Bind event handlers for later cleanup
@@ -599,10 +609,9 @@ export class GameManager {
   private changeReplaySpeed(direction: number): void {
     if (!this.replayPlayback) return;
 
-    const speeds: ReplaySpeed[] = [0.5, 1, 2];
-    const currentIndex = speeds.indexOf(this.replayPlayback.speed);
-    const newIndex = Math.max(0, Math.min(speeds.length - 1, currentIndex + direction));
-    const newSpeed = speeds[newIndex];
+    const currentIndex = REPLAY_SPEEDS.indexOf(this.replayPlayback.speed);
+    const newIndex = Math.max(0, Math.min(REPLAY_SPEEDS.length - 1, currentIndex + direction));
+    const newSpeed = REPLAY_SPEEDS[newIndex];
     if (newSpeed !== undefined) {
       ReplaySystem.setSpeed(this.replayPlayback, newSpeed);
     }

@@ -52,7 +52,7 @@ describe('ReplaySystem', () => {
       expect(replayData.finalScore).toBe(1000);
       expect(replayData.finalLevel).toBe(5);
       expect(replayData.finalLines).toBe(20);
-      expect(replayData.id).toMatch(/^replay_\d+_[a-z0-9]+$/);
+      expect(replayData.id).toMatch(/^replay_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(replayData.date).toBeTruthy();
       expect(replayData.duration).toBeGreaterThan(0);
     });
