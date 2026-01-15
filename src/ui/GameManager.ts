@@ -17,6 +17,7 @@ import type {
   ReplayData,
   ReplayPlaybackState,
   ReplaySpeed,
+  Statistics,
 } from '../types/index.ts';
 import { DEFAULT_CONFIG } from '../types/index.ts';
 import { Board } from '../game/Board.ts';
@@ -46,6 +47,7 @@ const MAIN_MENU_ITEMS: MenuItem[] = [
   { label: 'Start Game', action: 'start' },
   { label: 'Replays', action: 'replays' },
   { label: 'Rankings', action: 'rankings' },
+  { label: 'Statistics', action: 'statistics' },
   { label: 'Settings', action: 'settings' },
 ];
 
@@ -137,6 +139,15 @@ export class GameManager {
   private replaysCache: ReplayData[] = [];
   private replaySelectedIndex = 0;
   private replayPlayback: ReplayPlaybackState | null = null;
+
+  // Statistics state
+  private statisticsCache: Statistics | null = null;
+  private statisticsResetConfirm = false;
+
+  // Game session tracking for statistics
+  private gameStartTime = 0;
+  private sessionTetrisCount = 0;
+  private sessionTSpinCount = 0;
 
   // Event listener references for cleanup
   private readonly boundHandleVisibilityChange: () => void;
@@ -271,6 +282,10 @@ export class GameManager {
       this.handleReplaySelectNavigation(e);
     } else if (this.state === 'replay') {
       this.handleReplayNavigation(e);
+    } else if (this.state === 'settings') {
+      this.handleSettingsNavigation(e);
+    } else if (this.state === 'statistics') {
+      this.handleStatisticsNavigation(e);
     }
   }
 
@@ -347,8 +362,11 @@ export class GameManager {
       case 'rankings':
         this.showRanking();
         break;
+      case 'statistics':
+        this.showStatistics();
+        break;
       case 'settings':
-        this.announce('Settings - Coming soon');
+        this.showSettings();
         break;
     }
   }
@@ -379,6 +397,9 @@ export class GameManager {
   private startGame(): void {
     this.startTransition('fade-out', () => {
       this.initPlayState();
+      this.gameStartTime = performance.now();
+      this.sessionTetrisCount = 0;
+      this.sessionTSpinCount = 0;
       this.state = 'playing';
       this.startTransition('fade-in');
     });
@@ -460,6 +481,70 @@ export class GameManager {
       this.state = 'ranking';
       this.startTransition('fade-in');
     });
+  }
+
+  /**
+   * Show settings screen.
+   */
+  private showSettings(): void {
+    this.startTransition('fade-out', () => {
+      this.state = 'settings';
+      this.startTransition('fade-in');
+    });
+  }
+
+  /**
+   * Handle settings screen keyboard navigation.
+   */
+  private handleSettingsNavigation(e: KeyboardEvent): void {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      this.goToMenu();
+    }
+  }
+
+  /**
+   * Show statistics screen.
+   */
+  private showStatistics(): void {
+    this.startTransition('fade-out', () => {
+      this.statisticsCache = this.storage.getStatistics();
+      this.statisticsResetConfirm = false;
+      this.state = 'statistics';
+      this.startTransition('fade-in');
+    });
+  }
+
+  /**
+   * Handle statistics screen keyboard navigation.
+   */
+  private handleStatisticsNavigation(e: KeyboardEvent): void {
+    if (this.statisticsResetConfirm) {
+      // Reset confirmation mode - only Enter and Escape are handled.
+      // All other keys (including R) are intentionally ignored to prevent
+      // accidental re-triggering or unintended actions during confirmation.
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.storage.clearAllData();
+        this.statisticsCache = this.storage.getStatistics();
+        this.statisticsResetConfirm = false;
+        this.announce('すべてのデータがリセットされました');
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.statisticsResetConfirm = false;
+        this.announce('キャンセル');
+      }
+    } else {
+      // Normal mode
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        this.goToMenu();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        this.statisticsResetConfirm = true;
+        this.announce('警告: すべてのデータをリセットしますか? Enter で確定、Escape でキャンセル');
+      }
+    }
   }
 
   /**
@@ -682,6 +767,16 @@ export class GameManager {
       this.announce('ゲームオーバー');
       return;
     }
+
+    // Update cumulative statistics
+    const playTime = performance.now() - this.gameStartTime;
+    this.storage.updateStatistics(
+      playTime,
+      stats.lines,
+      this.sessionTetrisCount,
+      stats.level,
+      this.sessionTSpinCount
+    );
 
     // Stop recording and save replay
     if (this.replaySystem.isRecording()) {
@@ -945,6 +1040,14 @@ export class GameManager {
 
     const result = this.performLineClear();
 
+    // Track statistics
+    if (result.linesCleared === 4) {
+      this.sessionTetrisCount++;
+    }
+    if (result.tspinType !== 'none') {
+      this.sessionTSpinCount++;
+    }
+
     // Process score
     this.playState.scoreManager.processLineClear(result);
 
@@ -1147,6 +1250,16 @@ export class GameManager {
           if (this.replayPlayback.finished) {
             this.uiRenderer.renderReplayFinished();
           }
+        }
+        break;
+
+      case 'settings':
+        this.uiRenderer.renderSettings(this.inputHandler.getKeyBindings());
+        break;
+
+      case 'statistics':
+        if (this.statisticsCache) {
+          this.uiRenderer.renderStatistics(this.statisticsCache, this.statisticsResetConfirm);
         }
         break;
     }

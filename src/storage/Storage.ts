@@ -4,13 +4,17 @@
  * @description Manages localStorage operations with error handling for high scores.
  */
 
-import type { HighScoreEntry, ReplayData, InputAction } from '../types/index.ts';
+import type { HighScoreEntry, ReplayData, InputAction, Statistics } from '../types/index.ts';
+import { DEFAULT_STATISTICS } from '../types/index.ts';
 
 /** Storage key for high scores */
 const HIGH_SCORES_KEY = 'tetris_high_scores';
 
 /** Storage key for replays */
 const REPLAYS_KEY = 'tetris_replays';
+
+/** Storage key for statistics */
+const STATISTICS_KEY = 'tetris_statistics';
 
 /** Maximum number of high score entries to keep */
 export const MAX_HIGH_SCORES = 10;
@@ -407,6 +411,117 @@ export class Storage {
     } catch {
       return false;
     }
+  }
+
+  // ============================================================
+  // Statistics Storage Methods
+  // ============================================================
+
+  /**
+   * Get cumulative statistics.
+   * @returns Statistics object (defaults if not found)
+   */
+  getStatistics(): Statistics {
+    try {
+      const data = localStorage.getItem(STATISTICS_KEY);
+      if (!data) {
+        return { ...DEFAULT_STATISTICS };
+      }
+      const parsed: unknown = JSON.parse(data);
+      return this.validateStatistics(parsed);
+    } catch {
+      return { ...DEFAULT_STATISTICS };
+    }
+  }
+
+  /**
+   * Validate that parsed data is valid Statistics.
+   */
+  private validateStatistics(data: unknown): Statistics {
+    if (typeof data !== 'object' || data === null) {
+      return { ...DEFAULT_STATISTICS };
+    }
+    const obj = data as Record<string, unknown>;
+
+    return {
+      totalPlayTime: this.validatePositiveNumber(obj.totalPlayTime, 0),
+      totalLinesCleared: this.validatePositiveNumber(obj.totalLinesCleared, 0),
+      totalTetris: this.validatePositiveNumber(obj.totalTetris, 0),
+      highestLevel: this.validatePositiveNumber(obj.highestLevel, 0),
+      totalTSpins: this.validatePositiveNumber(obj.totalTSpins, 0),
+      gamesPlayed: this.validatePositiveNumber(obj.gamesPlayed, 0),
+    };
+  }
+
+  /**
+   * Validate that a value is a finite positive number.
+   */
+  private validatePositiveNumber(value: unknown, defaultValue: number): number {
+    if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+      return defaultValue;
+    }
+    return Math.floor(value);
+  }
+
+  /**
+   * Save statistics.
+   * @param stats - Statistics to save
+   * @returns true if saved successfully, false otherwise
+   */
+  saveStatistics(stats: Statistics): boolean {
+    try {
+      localStorage.setItem(STATISTICS_KEY, JSON.stringify(stats));
+      return true;
+    } catch (error) {
+      if (this.isQuotaExceededError(error)) {
+        // Statistics are small; quota exceeded is unlikely but handle gracefully
+        return false;
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Update statistics with game results.
+   * @param playTime - Play time in milliseconds
+   * @param linesCleared - Total lines cleared this game
+   * @param tetrisCount - Number of Tetris clears this game
+   * @param level - Final level reached
+   * @param tspinCount - Number of T-Spins this game
+   */
+  updateStatistics(
+    playTime: number,
+    linesCleared: number,
+    tetrisCount: number,
+    level: number,
+    tspinCount: number
+  ): void {
+    const stats = this.getStatistics();
+
+    stats.totalPlayTime += Math.max(0, playTime);
+    stats.totalLinesCleared += Math.max(0, linesCleared);
+    stats.totalTetris += Math.max(0, tetrisCount);
+    stats.highestLevel = Math.max(stats.highestLevel, level);
+    stats.totalTSpins += Math.max(0, tspinCount);
+    stats.gamesPlayed += 1;
+
+    this.saveStatistics(stats);
+  }
+
+  /**
+   * Clear all statistics (reset to defaults).
+   */
+  clearStatistics(): void {
+    localStorage.removeItem(STATISTICS_KEY);
+  }
+
+  /**
+   * Clear all game data (high scores, replays, statistics).
+   */
+  clearAllData(): void {
+    this.clearHighScores();
+    this.clearReplays();
+    this.clearStatistics();
   }
 }
 

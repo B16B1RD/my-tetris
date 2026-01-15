@@ -839,6 +839,311 @@ describe('Storage', () => {
   });
 });
 
+// ============================================================
+// Statistics Storage Tests
+// ============================================================
+
+describe('Statistics Storage', () => {
+  let storage: Storage;
+
+  beforeEach(() => {
+    storage = new Storage();
+    storage.clearStatistics();
+  });
+
+  describe('getStatistics', () => {
+    it('should return default statistics when none exist', () => {
+      const stats = storage.getStatistics();
+      expect(stats).toEqual({
+        totalPlayTime: 0,
+        totalLinesCleared: 0,
+        totalTetris: 0,
+        highestLevel: 0,
+        totalTSpins: 0,
+        gamesPlayed: 0,
+      });
+    });
+
+    it('should return saved statistics', () => {
+      const testStats = {
+        totalPlayTime: 60000,
+        totalLinesCleared: 100,
+        totalTetris: 10,
+        highestLevel: 15,
+        totalTSpins: 5,
+        gamesPlayed: 3,
+      };
+      storage.saveStatistics(testStats);
+
+      const stats = storage.getStatistics();
+      expect(stats).toEqual(testStats);
+    });
+
+    it('should handle invalid JSON in localStorage', () => {
+      localStorage.setItem('tetris_statistics', 'invalid json');
+      const stats = storage.getStatistics();
+      expect(stats.gamesPlayed).toBe(0);
+    });
+
+    it('should validate and sanitize negative values', () => {
+      const invalidStats = {
+        totalPlayTime: -100,
+        totalLinesCleared: -5,
+        totalTetris: -1,
+        highestLevel: -10,
+        totalTSpins: -2,
+        gamesPlayed: -3,
+      };
+      localStorage.setItem('tetris_statistics', JSON.stringify(invalidStats));
+
+      const stats = storage.getStatistics();
+      expect(stats.totalPlayTime).toBe(0);
+      expect(stats.totalLinesCleared).toBe(0);
+      expect(stats.totalTetris).toBe(0);
+      expect(stats.highestLevel).toBe(0);
+      expect(stats.totalTSpins).toBe(0);
+      expect(stats.gamesPlayed).toBe(0);
+    });
+
+    it('should validate NaN and Infinity values', () => {
+      // Note: JSON.stringify converts NaN to null and Infinity to null
+      const invalidStats = {
+        totalPlayTime: NaN,
+        totalLinesCleared: Infinity,
+        totalTetris: -Infinity,
+        highestLevel: NaN,
+        totalTSpins: Infinity,
+        gamesPlayed: NaN,
+      };
+      localStorage.setItem('tetris_statistics', JSON.stringify(invalidStats));
+
+      const stats = storage.getStatistics();
+      expect(stats.totalPlayTime).toBe(0);
+      expect(stats.totalLinesCleared).toBe(0);
+      expect(stats.totalTetris).toBe(0);
+      expect(stats.highestLevel).toBe(0);
+      expect(stats.totalTSpins).toBe(0);
+      expect(stats.gamesPlayed).toBe(0);
+    });
+
+    it('should return defaults when localStorage contains non-object', () => {
+      localStorage.setItem('tetris_statistics', JSON.stringify('not an object'));
+      const stats = storage.getStatistics();
+      expect(stats.gamesPlayed).toBe(0);
+    });
+
+    it('should return defaults when localStorage contains null', () => {
+      localStorage.setItem('tetris_statistics', JSON.stringify(null));
+      const stats = storage.getStatistics();
+      expect(stats.gamesPlayed).toBe(0);
+    });
+
+    it('should floor decimal values', () => {
+      const decimalStats = {
+        totalPlayTime: 1000.7,
+        totalLinesCleared: 50.9,
+        totalTetris: 5.5,
+        highestLevel: 10.3,
+        totalTSpins: 3.1,
+        gamesPlayed: 2.8,
+      };
+      localStorage.setItem('tetris_statistics', JSON.stringify(decimalStats));
+
+      const stats = storage.getStatistics();
+      expect(stats.totalPlayTime).toBe(1000);
+      expect(stats.totalLinesCleared).toBe(50);
+      expect(stats.totalTetris).toBe(5);
+      expect(stats.highestLevel).toBe(10);
+      expect(stats.totalTSpins).toBe(3);
+      expect(stats.gamesPlayed).toBe(2);
+    });
+  });
+
+  describe('saveStatistics', () => {
+    it('should save statistics successfully', () => {
+      const testStats = {
+        totalPlayTime: 60000,
+        totalLinesCleared: 100,
+        totalTetris: 10,
+        highestLevel: 15,
+        totalTSpins: 5,
+        gamesPlayed: 3,
+      };
+      const result = storage.saveStatistics(testStats);
+      expect(result).toBe(true);
+    });
+
+    it('should return false when localStorage throws non-quota error', () => {
+      const originalLocalStorage = globalThis.localStorage;
+      const mockLocalStorage = {
+        ...originalLocalStorage,
+        getItem: originalLocalStorage.getItem.bind(originalLocalStorage),
+        setItem: (): void => {
+          throw new Error('Generic storage error');
+        },
+        removeItem: originalLocalStorage.removeItem.bind(originalLocalStorage),
+        clear: originalLocalStorage.clear.bind(originalLocalStorage),
+        key: originalLocalStorage.key.bind(originalLocalStorage),
+        length: originalLocalStorage.length,
+      };
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: mockLocalStorage,
+        configurable: true,
+      });
+
+      try {
+        const testStorage = new Storage();
+        const result = testStorage.saveStatistics({
+          totalPlayTime: 1000,
+          totalLinesCleared: 10,
+          totalTetris: 1,
+          highestLevel: 5,
+          totalTSpins: 0,
+          gamesPlayed: 1,
+        });
+        expect(result).toBe(false);
+      } finally {
+        Object.defineProperty(globalThis, 'localStorage', {
+          value: originalLocalStorage,
+          configurable: true,
+        });
+      }
+    });
+
+    it('should return false when QuotaExceededError occurs', () => {
+      const originalLocalStorage = globalThis.localStorage;
+      const mockLocalStorage = {
+        ...originalLocalStorage,
+        getItem: originalLocalStorage.getItem.bind(originalLocalStorage),
+        setItem: (): void => {
+          const error = new DOMException('Quota exceeded', 'QuotaExceededError');
+          throw error;
+        },
+        removeItem: originalLocalStorage.removeItem.bind(originalLocalStorage),
+        clear: originalLocalStorage.clear.bind(originalLocalStorage),
+        key: originalLocalStorage.key.bind(originalLocalStorage),
+        length: originalLocalStorage.length,
+      };
+      Object.defineProperty(globalThis, 'localStorage', {
+        value: mockLocalStorage,
+        configurable: true,
+      });
+
+      try {
+        const testStorage = new Storage();
+        const result = testStorage.saveStatistics({
+          totalPlayTime: 1000,
+          totalLinesCleared: 10,
+          totalTetris: 1,
+          highestLevel: 5,
+          totalTSpins: 0,
+          gamesPlayed: 1,
+        });
+        expect(result).toBe(false);
+      } finally {
+        Object.defineProperty(globalThis, 'localStorage', {
+          value: originalLocalStorage,
+          configurable: true,
+        });
+      }
+    });
+  });
+
+  describe('updateStatistics', () => {
+    it('should accumulate statistics correctly', () => {
+      storage.updateStatistics(1000, 10, 2, 5, 1);
+      storage.updateStatistics(2000, 20, 1, 3, 2);
+
+      const stats = storage.getStatistics();
+      expect(stats.totalPlayTime).toBe(3000);
+      expect(stats.totalLinesCleared).toBe(30);
+      expect(stats.totalTetris).toBe(3);
+      expect(stats.totalTSpins).toBe(3);
+      expect(stats.gamesPlayed).toBe(2);
+    });
+
+    it('should track highest level correctly', () => {
+      storage.updateStatistics(1000, 10, 1, 15, 1);
+      storage.updateStatistics(2000, 20, 2, 10, 2);
+      storage.updateStatistics(3000, 30, 3, 20, 3);
+
+      const stats = storage.getStatistics();
+      expect(stats.highestLevel).toBe(20); // max of 15, 10, 20
+    });
+
+    it('should handle negative inputs safely', () => {
+      // updateStatistics uses Math.max(0, value) for playTime, lines, tetris, tspin
+      // to ensure negative values don't corrupt statistics. However, gamesPlayed
+      // always increments by 1 per call regardless of input values, as it counts
+      // the number of game sessions completed (not a user-provided value).
+      storage.updateStatistics(-100, -10, -1, -5, -1);
+
+      const stats = storage.getStatistics();
+      expect(stats.totalPlayTime).toBe(0);
+      expect(stats.totalLinesCleared).toBe(0);
+      expect(stats.totalTetris).toBe(0);
+      expect(stats.totalTSpins).toBe(0);
+      expect(stats.gamesPlayed).toBe(1); // Always increments: counts sessions, not user input
+    });
+
+    it('should handle zero level correctly', () => {
+      storage.updateStatistics(1000, 10, 1, 0, 1);
+
+      const stats = storage.getStatistics();
+      expect(stats.highestLevel).toBe(0); // max(0, 0) = 0
+    });
+
+    it('should maintain highestLevel when lower level is provided', () => {
+      // First game reaches level 15
+      storage.updateStatistics(1000, 10, 1, 15, 1);
+      expect(storage.getStatistics().highestLevel).toBe(15);
+
+      // Second game only reaches level 5 - highestLevel should remain 15
+      storage.updateStatistics(2000, 20, 2, 5, 2);
+      expect(storage.getStatistics().highestLevel).toBe(15);
+
+      // Third game reaches level 20 - highestLevel should update to 20
+      storage.updateStatistics(3000, 30, 3, 20, 3);
+      expect(storage.getStatistics().highestLevel).toBe(20);
+    });
+
+    it('should handle very large play time', () => {
+      const largeTime = Number.MAX_SAFE_INTEGER - 1000;
+      storage.updateStatistics(largeTime, 10, 1, 5, 1);
+
+      const stats = storage.getStatistics();
+      expect(stats.totalPlayTime).toBe(largeTime);
+    });
+  });
+
+  describe('clearStatistics', () => {
+    it('should reset statistics to defaults', () => {
+      storage.updateStatistics(1000, 10, 2, 5, 1);
+
+      storage.clearStatistics();
+
+      const stats = storage.getStatistics();
+      expect(stats.gamesPlayed).toBe(0);
+      expect(stats.totalPlayTime).toBe(0);
+    });
+  });
+
+  describe('clearAllData', () => {
+    it('should clear high scores, replays, and statistics', () => {
+      // Add some data
+      storage.addHighScore(createTestEntry('AAA', 1000));
+      storage.saveReplay(createTestReplay('r1', 1000));
+      storage.updateStatistics(1000, 10, 1, 5, 1);
+
+      storage.clearAllData();
+
+      expect(storage.getHighScores()).toEqual([]);
+      expect(storage.getReplays()).toEqual([]);
+      expect(storage.getStatistics().gamesPlayed).toBe(0);
+    });
+  });
+});
+
 function createTestEntry(name: string, score: number): HighScoreEntry {
   return {
     name,

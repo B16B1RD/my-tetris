@@ -87,7 +87,17 @@ export interface ActiveTetromino {
 /**
  * Possible states of the game.
  */
-export type GameState = 'menu' | 'playing' | 'paused' | 'gameover' | 'name-input' | 'ranking' | 'replay-select' | 'replay';
+export type GameState =
+  | 'menu'
+  | 'playing'
+  | 'paused'
+  | 'gameover'
+  | 'name-input'
+  | 'ranking'
+  | 'replay-select'
+  | 'replay'
+  | 'settings'
+  | 'statistics';
 
 /**
  * Menu item options for navigation.
@@ -362,4 +372,35 @@ export const BOARD_CONFIG: BoardConfig = {
   width: 10,
   height: 20,
   bufferHeight: 4,
+};
+
+/**
+ * Cumulative statistics for tracking player progress.
+ * Stored in localStorage and persists across sessions.
+ */
+export interface Statistics {
+  /** Total play time in milliseconds */
+  totalPlayTime: number;
+  /** Total lines cleared across all games */
+  totalLinesCleared: number;
+  /** Total number of Tetris line clears (4 lines at once) */
+  totalTetris: number;
+  /** Highest level reached in any game */
+  highestLevel: number;
+  /** Total number of T-Spins performed */
+  totalTSpins: number;
+  /** Total number of games played */
+  gamesPlayed: number;
+}
+
+/**
+ * Default statistics values for new players.
+ */
+export const DEFAULT_STATISTICS: Statistics = {
+  totalPlayTime: 0,
+  totalLinesCleared: 0,
+  totalTetris: 0,
+  highestLevel: 0,
+  totalTSpins: 0,
+  gamesPlayed: 0,
 };

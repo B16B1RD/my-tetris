@@ -12,6 +12,8 @@ import type {
   HighScoreEntry,
   ReplayData,
   ReplayPlaybackState,
+  Statistics,
+  KeyBindings,
 } from '../types/index.ts';
 import { DEFAULT_UI_CONFIG, DEFAULT_CONFIG } from '../types/index.ts';
 import { ReplaySystem } from '../systems/ReplaySystem.ts';
@@ -46,6 +48,14 @@ const FONT_SIZES = {
   replayEntrySelected: 16,
   replayHud: 14,
   replayHudSpeed: 18,
+  // Settings screen
+  settingsTitle: 36,
+  settingsLabel: 18,
+  settingsKey: 16,
+  // Statistics screen
+  statisticsTitle: 36,
+  statisticsLabel: 18,
+  statisticsValue: 24,
 } as const;
 
 /** Layout spacing values */
@@ -118,11 +128,26 @@ const LAYOUT = {
   /** Replay finished screen layout */
   replayFinishedTitleOffsetY: -20,
   replayFinishedTextOffsetY: 30,
+  /** Settings screen layout */
+  settingsTitleY: 50,
+  settingsTableY: 100,
+  settingsRowHeight: 35,
+  settingsLabelX: 50,
+  settingsKeyX: 250,
+  /** Statistics screen layout */
+  statisticsTitleY: 50,
+  statisticsTableY: 110,
+  statisticsRowHeight: 40,
+  statisticsLabelX: 50,
+  statisticsValueX: 350,
+  statisticsResetY: 530,
 } as const;
 
 /** Colors for UI elements */
 const UI_COLORS = {
-  hintText: '#666666',
+  // hintText: '#888888' provides ~5.3:1 contrast ratio against rgba(0,0,0,0.85) background,
+  // meeting WCAG AA standard (4.5:1 minimum for normal text)
+  hintText: '#888888',
   gameOverTitle: '#ff4444',
   rankingNew: '#ffdd00',
   rankingHeader: '#888888',
@@ -131,6 +156,9 @@ const UI_COLORS = {
   replayProgressBg: '#333333',
   replayPaused: '#ffaa00',
   replaySelectHighlight: 'rgba(0, 255, 255, 0.1)',
+  settingsKeyBg: 'rgba(255, 255, 255, 0.1)',
+  statisticsValue: '#00ffff',
+  resetWarning: '#ff6666',
 } as const;
 
 /**
@@ -619,6 +647,220 @@ export class UIRenderer {
     this.ctx.fillStyle = this.config.textColor;
     this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
     this.ctx.fillText('何かキーを押して続ける', this.width / 2, this.height / 2 + LAYOUT.replayFinishedTextOffsetY);
+  }
+
+  /**
+   * Render the settings screen.
+   * @param keyBindings - Current key bindings to display
+   */
+  renderSettings(keyBindings: KeyBindings): void {
+    this.drawOverlayBackground();
+
+    // Title
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.settingsTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('SETTINGS', this.width / 2, LAYOUT.settingsTitleY);
+
+    // Key bindings header
+    this.ctx.fillStyle = UI_COLORS.rankingHeader;
+    this.ctx.font = `${FONT_SIZES.rankingHeader}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'left';
+    const headerY = LAYOUT.settingsTableY;
+    this.ctx.fillText('操作', LAYOUT.settingsLabelX, headerY);
+    this.ctx.fillText('キー', LAYOUT.settingsKeyX, headerY);
+
+    // Key binding entries (Japanese labels for consistency with other UI text)
+    const actions: { label: string; action: keyof KeyBindings }[] = [
+      { label: '左移動', action: 'moveLeft' },
+      { label: '右移動', action: 'moveRight' },
+      { label: 'ソフトドロップ', action: 'softDrop' },
+      { label: 'ハードドロップ', action: 'hardDrop' },
+      { label: '右回転', action: 'rotateClockwise' },
+      { label: '左回転', action: 'rotateCounterClockwise' },
+      { label: 'ホールド', action: 'hold' },
+      { label: '一時停止', action: 'pause' },
+    ];
+
+    actions.forEach((item, index) => {
+      const y = LAYOUT.settingsTableY + (index + 1) * LAYOUT.settingsRowHeight;
+
+      // Action label
+      this.ctx.fillStyle = this.config.textColor;
+      this.ctx.font = `${FONT_SIZES.settingsLabel}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText(item.label, LAYOUT.settingsLabelX, y);
+
+      // Key display
+      const keys = keyBindings[item.action];
+      const keyDisplay = keys.length > 0 ? keys[0] ?? '-' : '-';
+
+      // Key background
+      // Note: measureText is called each frame but Settings screen is static,
+      // so performance impact is negligible. Consider caching if this becomes a bottleneck.
+      this.ctx.fillStyle = UI_COLORS.settingsKeyBg;
+      const keyText = this.formatKeyDisplay(keyDisplay);
+      const keyWidth = Math.max(60, this.ctx.measureText(keyText).width + 20);
+      this.ctx.fillRect(LAYOUT.settingsKeyX - 10, y - 12, keyWidth, 24);
+
+      // Key text
+      this.ctx.fillStyle = this.config.highlightColor;
+      this.ctx.font = `${FONT_SIZES.settingsKey}px ${this.config.fontFamily}`;
+      this.ctx.fillText(keyText, LAYOUT.settingsKeyX, y);
+    });
+
+    // Note about future expansion
+    // TODO: Remove this message when key binding customization is implemented
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(
+      'キー設定の変更は将来のバージョンで追加予定',
+      this.width / 2,
+      this.height - 80
+    );
+
+    // Instructions
+    this.ctx.fillText(
+      'Esc: 戻る',
+      this.width / 2,
+      this.height - LAYOUT.instructionBottomMargin
+    );
+  }
+
+  /**
+   * Format key display for settings screen.
+   */
+  private formatKeyDisplay(key: string): string {
+    const keyMap: Record<string, string> = {
+      ArrowLeft: '←',
+      ArrowRight: '→',
+      ArrowUp: '↑',
+      ArrowDown: '↓',
+      ' ': 'Space',
+      Escape: 'Esc',
+    };
+    return keyMap[key] ?? key.toUpperCase();
+  }
+
+  /**
+   * Render the statistics screen.
+   * @param stats - Cumulative statistics to display
+   * @param showResetConfirm - Whether to show reset confirmation
+   */
+  renderStatistics(stats: Statistics, showResetConfirm = false): void {
+    this.drawOverlayBackground();
+
+    // Title
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.statisticsTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('STATISTICS', this.width / 2, LAYOUT.statisticsTitleY);
+
+    // Statistics entries (Japanese labels for consistency with other UI text)
+    const entries: { label: string; value: string }[] = [
+      { label: '総プレイ時間', value: this.formatPlayTime(stats.totalPlayTime) },
+      { label: 'プレイ回数', value: stats.gamesPlayed.toLocaleString() },
+      { label: '総ライン消去', value: stats.totalLinesCleared.toLocaleString() },
+      { label: 'テトリス回数', value: stats.totalTetris.toLocaleString() },
+      {
+        label: 'テトリス率',
+        value: this.calculateTetrisRate(stats.totalLinesCleared, stats.totalTetris),
+      },
+      { label: '最高レベル', value: stats.highestLevel.toString() },
+      { label: 'T-Spin 回数', value: stats.totalTSpins.toLocaleString() },
+    ];
+
+    entries.forEach((entry, index) => {
+      const y = LAYOUT.statisticsTableY + index * LAYOUT.statisticsRowHeight;
+
+      // Label
+      this.ctx.fillStyle = this.config.textColor;
+      this.ctx.font = `${FONT_SIZES.statisticsLabel}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText(entry.label, LAYOUT.statisticsLabelX, y);
+
+      // Value
+      this.ctx.fillStyle = UI_COLORS.statisticsValue;
+      this.ctx.font = `bold ${FONT_SIZES.statisticsValue}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'right';
+      this.ctx.fillText(entry.value, LAYOUT.statisticsValueX, y);
+    });
+
+    // Reset data option
+    if (showResetConfirm) {
+      // Reset confirmation dialog - centered using relative coordinates
+      // Note: This is a Canvas-based modal, so DOM focus management is not applicable.
+      // Keyboard input is restricted in GameManager.handleStatisticsNavigation() to only
+      // allow Enter/Escape during confirmation mode, effectively trapping user interaction.
+      const dialogWidth = this.width - 80;
+      const dialogHeight = 200;
+      const dialogX = (this.width - dialogWidth) / 2;
+      const dialogY = (this.height - dialogHeight) / 2;
+
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+      this.ctx.fillRect(dialogX, dialogY, dialogWidth, dialogHeight);
+
+      this.ctx.fillStyle = UI_COLORS.resetWarning;
+      this.ctx.font = `bold ${FONT_SIZES.nameInputTitle}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('データをリセットしますか?', this.width / 2, dialogY + 60);
+
+      this.ctx.fillStyle = this.config.textColor;
+      this.ctx.font = `${FONT_SIZES.settingsLabel}px ${this.config.fontFamily}`;
+      this.ctx.fillText(
+        'スコア、リプレイ、統計データがすべて削除されます',
+        this.width / 2,
+        dialogY + 110
+      );
+
+      this.ctx.fillStyle = UI_COLORS.hintText;
+      this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+      this.ctx.fillText('Enter: 確定  Esc: キャンセル', this.width / 2, dialogY + 160);
+    } else {
+      // Reset hint
+      this.ctx.fillStyle = UI_COLORS.hintText;
+      this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('R: データをリセット', this.width / 2, LAYOUT.statisticsResetY);
+
+      // Instructions
+      this.ctx.fillText('Esc: 戻る', this.width / 2, this.height - LAYOUT.instructionBottomMargin);
+    }
+  }
+
+  /**
+   * Format play time from milliseconds to readable string.
+   */
+  private formatPlayTime(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
+  /**
+   * Calculate Tetris rate as a percentage.
+   * Tetris rate = (lines from Tetris / total lines) * 100
+   */
+  private calculateTetrisRate(totalLines: number, tetrisCount: number): string {
+    if (totalLines === 0) {
+      return '0%';
+    }
+    const linesFromTetris = tetrisCount * 4;
+    // Clamp to 100% max in case of data inconsistency
+    const rate = Math.min((linesFromTetris / totalLines) * 100, 100);
+    return `${rate.toFixed(1)}%`;
   }
 
   /**
