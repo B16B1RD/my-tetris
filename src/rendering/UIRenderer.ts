@@ -12,6 +12,8 @@ import type {
   HighScoreEntry,
   ReplayData,
   ReplayPlaybackState,
+  Statistics,
+  KeyBindings,
 } from '../types/index.ts';
 import { DEFAULT_UI_CONFIG, DEFAULT_CONFIG } from '../types/index.ts';
 import { ReplaySystem } from '../systems/ReplaySystem.ts';
@@ -46,6 +48,14 @@ const FONT_SIZES = {
   replayEntrySelected: 16,
   replayHud: 14,
   replayHudSpeed: 18,
+  // Settings screen
+  settingsTitle: 36,
+  settingsLabel: 18,
+  settingsKey: 16,
+  // Statistics screen
+  statisticsTitle: 36,
+  statisticsLabel: 18,
+  statisticsValue: 24,
 } as const;
 
 /** Layout spacing values */
@@ -118,6 +128,19 @@ const LAYOUT = {
   /** Replay finished screen layout */
   replayFinishedTitleOffsetY: -20,
   replayFinishedTextOffsetY: 30,
+  /** Settings screen layout */
+  settingsTitleY: 50,
+  settingsTableY: 100,
+  settingsRowHeight: 35,
+  settingsLabelX: 50,
+  settingsKeyX: 250,
+  /** Statistics screen layout */
+  statisticsTitleY: 50,
+  statisticsTableY: 110,
+  statisticsRowHeight: 40,
+  statisticsLabelX: 50,
+  statisticsValueX: 350,
+  statisticsResetY: 530,
 } as const;
 
 /** Colors for UI elements */
@@ -131,6 +154,9 @@ const UI_COLORS = {
   replayProgressBg: '#333333',
   replayPaused: '#ffaa00',
   replaySelectHighlight: 'rgba(0, 255, 255, 0.1)',
+  settingsKeyBg: 'rgba(255, 255, 255, 0.1)',
+  statisticsValue: '#00ffff',
+  resetWarning: '#ff6666',
 } as const;
 
 /**
@@ -619,6 +645,208 @@ export class UIRenderer {
     this.ctx.fillStyle = this.config.textColor;
     this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
     this.ctx.fillText('何かキーを押して続ける', this.width / 2, this.height / 2 + LAYOUT.replayFinishedTextOffsetY);
+  }
+
+  /**
+   * Render the settings screen.
+   * @param keyBindings - Current key bindings to display
+   */
+  renderSettings(keyBindings: KeyBindings): void {
+    this.drawOverlayBackground();
+
+    // Title
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.settingsTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('SETTINGS', this.width / 2, LAYOUT.settingsTitleY);
+
+    // Key bindings header
+    this.ctx.fillStyle = UI_COLORS.rankingHeader;
+    this.ctx.font = `${FONT_SIZES.rankingHeader}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'left';
+    const headerY = LAYOUT.settingsTableY;
+    this.ctx.fillText('ACTION', LAYOUT.settingsLabelX, headerY);
+    this.ctx.fillText('KEY', LAYOUT.settingsKeyX, headerY);
+
+    // Key binding entries
+    const actions: { label: string; action: keyof KeyBindings }[] = [
+      { label: 'Move Left', action: 'moveLeft' },
+      { label: 'Move Right', action: 'moveRight' },
+      { label: 'Soft Drop', action: 'softDrop' },
+      { label: 'Hard Drop', action: 'hardDrop' },
+      { label: 'Rotate CW', action: 'rotateClockwise' },
+      { label: 'Rotate CCW', action: 'rotateCounterClockwise' },
+      { label: 'Hold', action: 'hold' },
+      { label: 'Pause', action: 'pause' },
+    ];
+
+    actions.forEach((item, index) => {
+      const y = LAYOUT.settingsTableY + (index + 1) * LAYOUT.settingsRowHeight;
+
+      // Action label
+      this.ctx.fillStyle = this.config.textColor;
+      this.ctx.font = `${FONT_SIZES.settingsLabel}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText(item.label, LAYOUT.settingsLabelX, y);
+
+      // Key display
+      const keys = keyBindings[item.action];
+      const keyDisplay = keys.length > 0 ? keys[0] ?? '-' : '-';
+
+      // Key background
+      this.ctx.fillStyle = UI_COLORS.settingsKeyBg;
+      const keyText = this.formatKeyDisplay(keyDisplay);
+      const keyWidth = Math.max(60, this.ctx.measureText(keyText).width + 20);
+      this.ctx.fillRect(LAYOUT.settingsKeyX - 10, y - 12, keyWidth, 24);
+
+      // Key text
+      this.ctx.fillStyle = this.config.highlightColor;
+      this.ctx.font = `${FONT_SIZES.settingsKey}px ${this.config.fontFamily}`;
+      this.ctx.fillText(keyText, LAYOUT.settingsKeyX, y);
+    });
+
+    // Note about future expansion
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(
+      'キー設定の変更は将来のバージョンで追加予定',
+      this.width / 2,
+      this.height - 80
+    );
+
+    // Instructions
+    this.ctx.fillText(
+      'Esc: 戻る',
+      this.width / 2,
+      this.height - LAYOUT.instructionBottomMargin
+    );
+  }
+
+  /**
+   * Format key display for settings screen.
+   */
+  private formatKeyDisplay(key: string): string {
+    const keyMap: Record<string, string> = {
+      ArrowLeft: '←',
+      ArrowRight: '→',
+      ArrowUp: '↑',
+      ArrowDown: '↓',
+      ' ': 'Space',
+      Escape: 'Esc',
+    };
+    return keyMap[key] ?? key.toUpperCase();
+  }
+
+  /**
+   * Render the statistics screen.
+   * @param stats - Cumulative statistics to display
+   * @param showResetConfirm - Whether to show reset confirmation
+   */
+  renderStatistics(stats: Statistics, showResetConfirm = false): void {
+    this.drawOverlayBackground();
+
+    // Title
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.statisticsTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('STATISTICS', this.width / 2, LAYOUT.statisticsTitleY);
+
+    // Statistics entries
+    const entries: { label: string; value: string }[] = [
+      { label: 'Total Play Time', value: this.formatPlayTime(stats.totalPlayTime) },
+      { label: 'Games Played', value: stats.gamesPlayed.toLocaleString() },
+      { label: 'Total Lines Cleared', value: stats.totalLinesCleared.toLocaleString() },
+      { label: 'Total Tetris', value: stats.totalTetris.toLocaleString() },
+      {
+        label: 'Tetris Rate',
+        value: this.calculateTetrisRate(stats.totalLinesCleared, stats.totalTetris),
+      },
+      { label: 'Highest Level', value: stats.highestLevel.toString() },
+      { label: 'Total T-Spins', value: stats.totalTSpins.toLocaleString() },
+    ];
+
+    entries.forEach((entry, index) => {
+      const y = LAYOUT.statisticsTableY + index * LAYOUT.statisticsRowHeight;
+
+      // Label
+      this.ctx.fillStyle = this.config.textColor;
+      this.ctx.font = `${FONT_SIZES.statisticsLabel}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'left';
+      this.ctx.fillText(entry.label, LAYOUT.statisticsLabelX, y);
+
+      // Value
+      this.ctx.fillStyle = UI_COLORS.statisticsValue;
+      this.ctx.font = `bold ${FONT_SIZES.statisticsValue}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'right';
+      this.ctx.fillText(entry.value, LAYOUT.statisticsValueX, y);
+    });
+
+    // Reset data option
+    if (showResetConfirm) {
+      // Reset confirmation dialog
+      this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+      this.ctx.fillRect(40, 200, this.width - 80, 200);
+
+      this.ctx.fillStyle = UI_COLORS.resetWarning;
+      this.ctx.font = `bold ${FONT_SIZES.nameInputTitle}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('RESET ALL DATA?', this.width / 2, 260);
+
+      this.ctx.fillStyle = this.config.textColor;
+      this.ctx.font = `${FONT_SIZES.settingsLabel}px ${this.config.fontFamily}`;
+      this.ctx.fillText(
+        'This will delete all scores, replays, and statistics.',
+        this.width / 2,
+        310
+      );
+
+      this.ctx.fillStyle = UI_COLORS.hintText;
+      this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+      this.ctx.fillText('Enter: Confirm  Esc: Cancel', this.width / 2, 360);
+    } else {
+      // Reset hint
+      this.ctx.fillStyle = UI_COLORS.hintText;
+      this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText('R: Reset All Data', this.width / 2, LAYOUT.statisticsResetY);
+
+      // Instructions
+      this.ctx.fillText('Esc: 戻る', this.width / 2, this.height - LAYOUT.instructionBottomMargin);
+    }
+  }
+
+  /**
+   * Format play time from milliseconds to readable string.
+   */
+  private formatPlayTime(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    if (hours > 0) {
+      return `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    } else {
+      return `${seconds}s`;
+    }
+  }
+
+  /**
+   * Calculate Tetris rate as a percentage.
+   * Tetris rate = (lines from Tetris / total lines) * 100
+   */
+  private calculateTetrisRate(totalLines: number, tetrisCount: number): string {
+    if (totalLines === 0) {
+      return '0%';
+    }
+    const linesFromTetris = tetrisCount * 4;
+    const rate = (linesFromTetris / totalLines) * 100;
+    return `${rate.toFixed(1)}%`;
   }
 
   /**
