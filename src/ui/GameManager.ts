@@ -563,6 +563,7 @@ export class GameManager {
       this.initPlayState(replay.seed);
       this.replayPlayback = ReplaySystem.createPlaybackState(replay);
       this.state = 'replay';
+      this.announce('リプレイ再生開始');
       this.startTransition('fade-in');
     });
   }
@@ -580,6 +581,7 @@ export class GameManager {
           this.exitReplay();
         } else {
           ReplaySystem.togglePause(this.replayPlayback);
+          this.announce(this.replayPlayback.paused ? 'リプレイ一時停止' : 'リプレイ再生中');
         }
         break;
       case 'ArrowLeft':
