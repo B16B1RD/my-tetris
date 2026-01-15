@@ -77,17 +77,17 @@ src/
 │   ├── TSpin.ts      # T-Spin 判定
 │   └── ...
 ├── systems/          # ゲームシステム
-│   ├── GameManager.ts    # ゲーム管理
+│   ├── GameLoop.ts       # ゲームループ
 │   ├── ScoreManager.ts   # スコア管理
 │   ├── InputHandler.ts   # 入力処理
+│   ├── ReplaySystem.ts   # リプレイシステム
 │   └── ...
 ├── rendering/        # 描画処理
-│   ├── Renderer.ts   # メインレンダラー
+│   ├── Renderer.ts       # メインレンダラー
+│   ├── BoardRenderer.ts  # ボード描画
 │   └── ...
 ├── storage/          # データ保存
-│   ├── HighScoreManager.ts   # ハイスコア管理
-│   ├── ReplayManager.ts      # リプレイ管理
-│   └── ...
+│   └── Storage.ts        # ローカルストレージ管理
 ├── ui/               # UI コンポーネント
 │   └── UIRenderer.ts # UI 描画
 └── types/            # 型定義
