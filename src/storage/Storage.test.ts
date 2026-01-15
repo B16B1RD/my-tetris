@@ -783,6 +783,58 @@ describe('Storage', () => {
         expect(replays).toHaveLength(1);
         expect(replays[0]?.id).toBe('r2');
       });
+
+      it('should filter out replays with invalid date format', () => {
+        const invalidData = [
+          {
+            id: 'r1',
+            seed: 123,
+            events: [],
+            finalScore: 1000,
+            finalLevel: 1,
+            finalLines: 10,
+            date: 'not-a-valid-date',
+            duration: 60000,
+          },
+          {
+            id: 'r2',
+            seed: 123,
+            events: [],
+            finalScore: 1000,
+            finalLevel: 1,
+            finalLines: 10,
+            date: '',
+            duration: 60000,
+          },
+          createTestReplay('r3', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r3');
+      });
+
+      it('should filter out replays with empty ID', () => {
+        const invalidData = [
+          {
+            id: '',
+            seed: 123,
+            events: [],
+            finalScore: 1000,
+            finalLevel: 1,
+            finalLines: 10,
+            date: '2024-01-01T00:00:00Z',
+            duration: 60000,
+          },
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
     });
   });
 });

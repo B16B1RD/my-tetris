@@ -80,6 +80,19 @@ describe('ReplaySystem', () => {
       expect(replaySystem.getSeed()).toBe(22222);
       expect(replaySystem.getEventCount()).toBe(0); // Events should be reset
     });
+
+    it('should return default data when stopRecording called without startRecording', () => {
+      // Never called startRecording - should return replay with default seed (0)
+      const replayData = replaySystem.stopRecording(0, 1, 0);
+
+      expect(replaySystem.isRecording()).toBe(false);
+      expect(replayData.seed).toBe(0);
+      expect(replayData.events).toEqual([]);
+      expect(replayData.finalScore).toBe(0);
+      expect(replayData.finalLevel).toBe(1);
+      expect(replayData.finalLines).toBe(0);
+      expect(replayData.id).toMatch(/^replay_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    });
   });
 
   describe('Playback', () => {
@@ -242,6 +255,20 @@ describe('ReplaySystem', () => {
       expect(ReplaySystem.formatTime(5000)).toBe('00:05');
       expect(ReplaySystem.formatTime(65000)).toBe('01:05');
       expect(ReplaySystem.formatTime(3600000)).toBe('60:00');
+    });
+
+    it('should handle negative time values', () => {
+      // Negative values: Math.floor(-500/1000) = -1, Math.floor(-1000/1000) = -1
+      // minutes = Math.floor(-1 / 60) = -1, seconds = -1 % 60 = -1
+      // This produces '-1:-1' which is undefined behavior (negative time is invalid)
+      // Test documents actual behavior rather than expected behavior
+      expect(ReplaySystem.formatTime(-1000)).toBe('-1:-1');
+      expect(ReplaySystem.formatTime(-500)).toBe('-1:-1');
+    });
+
+    it('should handle NaN by returning NaN:NaN', () => {
+      // NaN values produce 'NaN:NaN' because Math.floor(NaN) = NaN
+      expect(ReplaySystem.formatTime(NaN)).toBe('NaN:NaN');
     });
   });
 
