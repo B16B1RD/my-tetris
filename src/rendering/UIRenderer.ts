@@ -10,8 +10,11 @@ import type {
   TransitionState,
   GameStats,
   HighScoreEntry,
+  ReplayData,
+  ReplayPlaybackState,
 } from '../types/index.ts';
 import { DEFAULT_UI_CONFIG, DEFAULT_CONFIG } from '../types/index.ts';
+import { ReplaySystem } from '../systems/ReplaySystem.ts';
 import { MAX_HIGH_SCORES } from '../storage/Storage.ts';
 
 /** Font sizes used in UI rendering */
@@ -37,6 +40,12 @@ const FONT_SIZES = {
   nameInputTitle: 32,
   nameInputLabel: 20,
   nameInputValue: 36,
+  // Replay screen
+  replaySelectTitle: 36,
+  replayEntry: 16,
+  replayEntrySelected: 16,
+  replayHud: 14,
+  replayHudSpeed: 18,
 } as const;
 
 /** Layout spacing values */
@@ -77,6 +86,15 @@ const LAYOUT = {
   nameInputValueY: 290,
   nameInputCursorWidth: 20,
   nameInputCursorOffsetY: 15,
+  /** Replay select screen layout */
+  replaySelectTitleY: 50,
+  replayListY: 100,
+  replayRowHeight: 55,
+  replayEmptyY: 250,
+  /** Replay HUD layout */
+  replayHudPadding: 10,
+  replayHudBarHeight: 4,
+  replayHudBarWidth: 200,
 } as const;
 
 /** Colors for UI elements */
@@ -86,6 +104,9 @@ const UI_COLORS = {
   rankingNew: '#ffdd00',
   rankingHeader: '#888888',
   nameInputCursor: '#00ffff',
+  replayProgress: '#00ffff',
+  replayProgressBg: '#333333',
+  replayPaused: '#ffaa00',
 } as const;
 
 /**
@@ -394,6 +415,161 @@ export class UIRenderer {
       this.width / 2,
       this.height - LAYOUT.instructionBottomMargin
     );
+  }
+
+  /**
+   * Render the replay selection screen.
+   * @param replays - Array of saved replays
+   * @param selectedIndex - Currently selected replay index
+   */
+  renderReplaySelect(replays: ReplayData[], selectedIndex: number): void {
+    this.drawOverlayBackground();
+
+    // Title
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.replaySelectTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('REPLAYS', this.width / 2, LAYOUT.replaySelectTitleY);
+
+    if (replays.length === 0) {
+      // No replays message
+      this.ctx.fillStyle = UI_COLORS.hintText;
+      this.ctx.font = `${FONT_SIZES.replayEntry}px ${this.config.fontFamily}`;
+      this.ctx.fillText('リプレイがありません', this.width / 2, LAYOUT.replayEmptyY);
+    } else {
+      // Replay entries
+      for (let i = 0; i < replays.length; i++) {
+        const replay = replays[i];
+        if (!replay) continue;
+
+        const y = LAYOUT.replayListY + i * LAYOUT.replayRowHeight;
+        const isSelected = i === selectedIndex;
+
+        // Background highlight for selected
+        if (isSelected) {
+          this.ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
+          this.ctx.fillRect(20, y - 20, this.width - 40, LAYOUT.replayRowHeight - 5);
+
+          // Selection indicator
+          this.ctx.fillStyle = this.config.highlightColor;
+          this.ctx.font = `bold ${FONT_SIZES.replayEntrySelected}px ${this.config.fontFamily}`;
+          this.ctx.textAlign = 'left';
+          this.ctx.fillText('▶', 30, y);
+        }
+
+        // Replay info
+        this.ctx.fillStyle = isSelected ? this.config.highlightColor : this.config.textColor;
+        this.ctx.font = isSelected
+          ? `bold ${FONT_SIZES.replayEntrySelected}px ${this.config.fontFamily}`
+          : `${FONT_SIZES.replayEntry}px ${this.config.fontFamily}`;
+        this.ctx.textAlign = 'left';
+
+        // Date (formatted)
+        const date = new Date(replay.date);
+        const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        this.ctx.fillText(dateStr, 50, y);
+
+        // Score
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(`${replay.finalScore.toLocaleString()} pts`, this.width - 120, y);
+
+        // Duration
+        this.ctx.fillStyle = isSelected ? this.config.textColor : UI_COLORS.hintText;
+        this.ctx.fillText(ReplaySystem.formatTime(replay.duration), this.width - 30, y);
+
+        // Level info (second line)
+        this.ctx.textAlign = 'left';
+        this.ctx.fillStyle = UI_COLORS.hintText;
+        this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+        this.ctx.fillText(`Lv.${replay.finalLevel} / ${replay.finalLines} lines`, 50, y + 18);
+      }
+    }
+
+    // Instructions
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(
+      '↑↓: 選択  Enter: 再生  Esc: 戻る',
+      this.width / 2,
+      this.height - LAYOUT.instructionBottomMargin
+    );
+  }
+
+  /**
+   * Render the replay playback HUD overlay.
+   * @param state - Current replay playback state
+   */
+  renderReplayHUD(state: ReplayPlaybackState): void {
+    const padding = LAYOUT.replayHudPadding;
+
+    // Top bar with "REPLAY" indicator and speed
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(0, 0, this.width, 35);
+
+    // "REPLAY" text
+    this.ctx.fillStyle = state.paused ? UI_COLORS.replayPaused : this.config.highlightColor;
+    this.ctx.font = `bold ${FONT_SIZES.replayHud}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText(state.paused ? '▐▐ PAUSED' : '▶ REPLAY', padding, 18);
+
+    // Speed indicator
+    this.ctx.fillStyle = this.config.textColor;
+    this.ctx.font = `bold ${FONT_SIZES.replayHudSpeed}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'right';
+    this.ctx.fillText(`${state.speed}x`, this.width - padding, 18);
+
+    // Bottom bar with progress
+    const bottomY = this.height - 30;
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(0, bottomY, this.width, 30);
+
+    // Time display
+    const currentTimeStr = ReplaySystem.formatTime(state.currentTime);
+    const totalTimeStr = ReplaySystem.formatTime(state.replay.duration);
+    this.ctx.fillStyle = this.config.textColor;
+    this.ctx.font = `${FONT_SIZES.replayHud}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'left';
+    this.ctx.fillText(`${currentTimeStr} / ${totalTimeStr}`, padding, bottomY + 15);
+
+    // Progress bar
+    const barX = 120;
+    const barWidth = LAYOUT.replayHudBarWidth;
+    const barY = bottomY + 12;
+
+    // Background
+    this.ctx.fillStyle = UI_COLORS.replayProgressBg;
+    this.ctx.fillRect(barX, barY, barWidth, LAYOUT.replayHudBarHeight);
+
+    // Progress
+    const progress = ReplaySystem.getProgress(state) / 100;
+    this.ctx.fillStyle = UI_COLORS.replayProgress;
+    this.ctx.fillRect(barX, barY, barWidth * progress, LAYOUT.replayHudBarHeight);
+
+    // Controls hint
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'right';
+    this.ctx.fillText('Space: 再生/一時停止  ←→: 速度  Esc: 終了', this.width - padding, bottomY + 15);
+  }
+
+  /**
+   * Render the replay finished overlay.
+   */
+  renderReplayFinished(): void {
+    this.drawOverlayBackground();
+
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.pauseTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('REPLAY FINISHED', this.width / 2, this.height / 2 - 20);
+
+    this.ctx.fillStyle = this.config.textColor;
+    this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
+    this.ctx.fillText('Press any key to continue', this.width / 2, this.height / 2 + 30);
   }
 
   /**

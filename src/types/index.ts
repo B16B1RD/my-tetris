@@ -87,7 +87,7 @@ export interface ActiveTetromino {
 /**
  * Possible states of the game.
  */
-export type GameState = 'menu' | 'playing' | 'paused' | 'gameover' | 'name-input' | 'ranking';
+export type GameState = 'menu' | 'playing' | 'paused' | 'gameover' | 'name-input' | 'ranking' | 'replay-select' | 'replay';
 
 /**
  * Menu item options for navigation.
@@ -230,6 +230,8 @@ export interface ReplayEvent {
  * Complete replay data for a game session.
  */
 export interface ReplayData {
+  /** Unique ID for this replay */
+  id: string;
   /** Random seed for piece generation */
   seed: number;
   /** Recorded input events */
@@ -242,6 +244,31 @@ export interface ReplayData {
   finalLines: number;
   /** ISO 8601 date string */
   date: string;
+  /** Duration in milliseconds */
+  duration: number;
+}
+
+/**
+ * Replay playback speed options.
+ */
+export type ReplaySpeed = 0.5 | 1 | 2;
+
+/**
+ * State for replay playback.
+ */
+export interface ReplayPlaybackState {
+  /** The replay data being played */
+  replay: ReplayData;
+  /** Current playback position in milliseconds */
+  currentTime: number;
+  /** Index of next event to process */
+  nextEventIndex: number;
+  /** Whether playback is paused */
+  paused: boolean;
+  /** Playback speed multiplier */
+  speed: ReplaySpeed;
+  /** Whether playback has finished */
+  finished: boolean;
 }
 
 /**

@@ -4,8 +4,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { Storage, getStorage } from './Storage.ts';
-import type { HighScoreEntry } from '../types/index.ts';
+import { Storage, getStorage, MAX_REPLAYS } from './Storage.ts';
+import type { HighScoreEntry, ReplayData } from '../types/index.ts';
 
 describe('Storage', () => {
   let storage: Storage;
@@ -13,6 +13,7 @@ describe('Storage', () => {
   beforeEach(() => {
     storage = new Storage();
     storage.clearHighScores();
+    storage.clearReplays();
   });
 
   describe('getHighScores', () => {
@@ -441,6 +442,172 @@ describe('Storage', () => {
       }
     });
   });
+
+  // ============================================================
+  // Replay Storage Tests
+  // ============================================================
+
+  describe('Replay Storage', () => {
+    describe('getReplays', () => {
+      it('should return empty array when no replays exist', () => {
+        const replays = storage.getReplays();
+        expect(replays).toEqual([]);
+      });
+
+      it('should return replays sorted by date (newest first)', () => {
+        storage.saveReplay(createTestReplay('r1', 1000, '2024-01-01T00:00:00Z'));
+        storage.saveReplay(createTestReplay('r2', 2000, '2024-01-03T00:00:00Z'));
+        storage.saveReplay(createTestReplay('r3', 3000, '2024-01-02T00:00:00Z'));
+
+        const replays = storage.getReplays();
+        expect(replays[0]?.id).toBe('r2');
+        expect(replays[1]?.id).toBe('r3');
+        expect(replays[2]?.id).toBe('r1');
+      });
+    });
+
+    describe('saveReplay', () => {
+      it('should save a new replay', () => {
+        const result = storage.saveReplay(createTestReplay('r1', 1000));
+        expect(result).toBe(true);
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r1');
+      });
+
+      it('should maintain maximum of MAX_REPLAYS', () => {
+        for (let i = 0; i < MAX_REPLAYS + 3; i++) {
+          storage.saveReplay(
+            createTestReplay(`r${i}`, 1000, `2024-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`)
+          );
+        }
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(MAX_REPLAYS);
+        // Newest replays should be kept
+        expect(replays[0]?.id).toBe(`r${MAX_REPLAYS + 2}`);
+      });
+
+      it('should replace existing replay with same ID', () => {
+        storage.saveReplay(createTestReplay('r1', 1000));
+        storage.saveReplay(createTestReplay('r1', 2000));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.finalScore).toBe(2000);
+      });
+    });
+
+    describe('getReplayById', () => {
+      it('should return replay by ID', () => {
+        storage.saveReplay(createTestReplay('r1', 1000));
+        storage.saveReplay(createTestReplay('r2', 2000));
+
+        const replay = storage.getReplayById('r1');
+        expect(replay).not.toBeNull();
+        expect(replay?.id).toBe('r1');
+      });
+
+      it('should return null for non-existent ID', () => {
+        const replay = storage.getReplayById('nonexistent');
+        expect(replay).toBeNull();
+      });
+    });
+
+    describe('deleteReplay', () => {
+      it('should delete replay by ID', () => {
+        storage.saveReplay(createTestReplay('r1', 1000));
+        storage.saveReplay(createTestReplay('r2', 2000));
+
+        const result = storage.deleteReplay('r1');
+        expect(result).toBe(true);
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
+
+      it('should return false for non-existent ID', () => {
+        const result = storage.deleteReplay('nonexistent');
+        expect(result).toBe(false);
+      });
+    });
+
+    describe('clearReplays', () => {
+      it('should remove all replays', () => {
+        storage.saveReplay(createTestReplay('r1', 1000));
+        storage.saveReplay(createTestReplay('r2', 2000));
+
+        storage.clearReplays();
+
+        const replays = storage.getReplays();
+        expect(replays).toEqual([]);
+      });
+    });
+
+    describe('replay data validation', () => {
+      it('should handle invalid JSON in localStorage', () => {
+        localStorage.setItem('tetris_replays', 'invalid json');
+        const replays = storage.getReplays();
+        expect(replays).toEqual([]);
+      });
+
+      it('should filter out replays with missing fields', () => {
+        const invalidData = [
+          { id: 'r1', seed: 123 }, // missing many fields
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
+
+      it('should filter out replays with invalid events', () => {
+        const invalidData = [
+          {
+            id: 'r1',
+            seed: 123,
+            events: [{ timestamp: 'invalid', action: 'moveLeft' }],
+            finalScore: 1000,
+            finalLevel: 1,
+            finalLines: 10,
+            date: '2024-01-01',
+            duration: 60000,
+          },
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
+
+      it('should filter out replays with invalid action types', () => {
+        const invalidData = [
+          {
+            id: 'r1',
+            seed: 123,
+            events: [{ timestamp: 100, action: 'invalidAction' }],
+            finalScore: 1000,
+            finalLevel: 1,
+            finalLines: 10,
+            date: '2024-01-01',
+            duration: 60000,
+          },
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
+    });
+  });
 });
 
 function createTestEntry(name: string, score: number): HighScoreEntry {
@@ -450,5 +617,21 @@ function createTestEntry(name: string, score: number): HighScoreEntry {
     level: Math.floor(score / 1000),
     lines: Math.floor(score / 100),
     date: new Date().toISOString(),
+  };
+}
+
+function createTestReplay(id: string, score: number, date?: string): ReplayData {
+  return {
+    id,
+    seed: 12345,
+    events: [
+      { timestamp: 100, action: 'moveLeft' },
+      { timestamp: 200, action: 'hardDrop' },
+    ],
+    finalScore: score,
+    finalLevel: Math.floor(score / 1000) || 1,
+    finalLines: Math.floor(score / 100),
+    date: date ?? new Date().toISOString(),
+    duration: 60000,
   };
 }
