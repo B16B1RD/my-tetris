@@ -4,16 +4,38 @@
  * @description Manages localStorage operations with error handling for high scores.
  */
 
-import type { HighScoreEntry } from '../types/index.ts';
+import type { HighScoreEntry, ReplayData, InputAction } from '../types/index.ts';
 
 /** Storage key for high scores */
 const HIGH_SCORES_KEY = 'tetris_high_scores';
 
+/** Storage key for replays */
+const REPLAYS_KEY = 'tetris_replays';
+
 /** Maximum number of high score entries to keep */
 export const MAX_HIGH_SCORES = 10;
 
+/** Maximum number of replays to keep */
+export const MAX_REPLAYS = 5;
+
 /** Default player name */
 const DEFAULT_PLAYER_NAME = 'AAA';
+
+/**
+ * Valid input actions for replay validation.
+ * Must be kept in sync with InputAction type defined in types/index.ts.
+ * This array is used for runtime validation of replay data loaded from localStorage.
+ */
+const VALID_INPUT_ACTIONS: readonly InputAction[] = [
+  'moveLeft',
+  'moveRight',
+  'softDrop',
+  'hardDrop',
+  'rotateClockwise',
+  'rotateCounterClockwise',
+  'hold',
+  'pause',
+] as const;
 
 /**
  * Storage manager for persisting game data to localStorage.
@@ -200,6 +222,187 @@ export class Storage {
       scores.push(entry);
       const sortedScores = this.sortScores(scores).slice(0, MAX_HIGH_SCORES - 2);
       localStorage.setItem(HIGH_SCORES_KEY, JSON.stringify(sortedScores));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ============================================================
+  // Replay Storage Methods
+  // ============================================================
+
+  /**
+   * Get all saved replays sorted by date (newest first).
+   * @returns Array of replay data
+   */
+  getReplays(): ReplayData[] {
+    try {
+      const data = localStorage.getItem(REPLAYS_KEY);
+      if (!data) {
+        return [];
+      }
+      const parsed: unknown = JSON.parse(data);
+      const replays = this.validateReplays(parsed);
+      return this.sortReplaysByDate(replays);
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * Validate that parsed data is a valid array of ReplayData.
+   */
+  private validateReplays(data: unknown): ReplayData[] {
+    if (!Array.isArray(data)) {
+      return [];
+    }
+    return data.filter((entry): entry is ReplayData => this.isValidReplay(entry));
+  }
+
+  /**
+   * Type guard to check if an object is valid ReplayData.
+   */
+  private isValidReplay(entry: unknown): entry is ReplayData {
+    if (typeof entry !== 'object' || entry === null) {
+      return false;
+    }
+    const obj = entry as Record<string, unknown>;
+    return (
+      typeof obj.id === 'string' &&
+      obj.id.length > 0 && // Empty ID check
+      typeof obj.seed === 'number' &&
+      Array.isArray(obj.events) &&
+      obj.events.every((e) => this.isValidReplayEvent(e)) &&
+      typeof obj.finalScore === 'number' &&
+      typeof obj.finalLevel === 'number' &&
+      typeof obj.finalLines === 'number' &&
+      typeof obj.date === 'string' &&
+      this.isValidDateString(obj.date) && // Date format validation
+      typeof obj.duration === 'number' &&
+      Number.isFinite(obj.seed) &&
+      Number.isFinite(obj.finalScore) &&
+      Number.isFinite(obj.finalLevel) &&
+      Number.isFinite(obj.finalLines) &&
+      Number.isFinite(obj.duration) &&
+      obj.finalScore >= 0 &&
+      obj.finalLevel >= 1 &&
+      obj.finalLines >= 0 &&
+      obj.duration >= 0
+    );
+  }
+
+  /**
+   * Validate that a string is a valid ISO 8601 date format.
+   */
+  private isValidDateString(date: string): boolean {
+    const timestamp = Date.parse(date);
+    return !Number.isNaN(timestamp);
+  }
+
+  /**
+   * Type guard for ReplayEvent.
+   */
+  private isValidReplayEvent(event: unknown): boolean {
+    if (typeof event !== 'object' || event === null) {
+      return false;
+    }
+    const obj = event as Record<string, unknown>;
+    return (
+      typeof obj.timestamp === 'number' &&
+      typeof obj.action === 'string' &&
+      VALID_INPUT_ACTIONS.includes(obj.action as InputAction) &&
+      Number.isFinite(obj.timestamp) &&
+      obj.timestamp >= 0
+    );
+  }
+
+  /**
+   * Save a replay.
+   * Maintains only the most recent MAX_REPLAYS entries.
+   * @param replay - The replay data to save
+   * @returns true if saved successfully, false otherwise
+   */
+  saveReplay(replay: ReplayData): boolean {
+    try {
+      const replays = this.getReplays();
+
+      // Check if replay with same ID already exists (replace it)
+      const existingIndex = replays.findIndex((r) => r.id === replay.id);
+      if (existingIndex !== -1) {
+        replays[existingIndex] = replay;
+      } else {
+        replays.push(replay);
+      }
+
+      // Sort by date (newest first) and keep only MAX_REPLAYS
+      const sortedReplays = this.sortReplaysByDate(replays).slice(0, MAX_REPLAYS);
+      localStorage.setItem(REPLAYS_KEY, JSON.stringify(sortedReplays));
+      return true;
+    } catch (error) {
+      if (this.isQuotaExceededError(error)) {
+        return this.handleReplayQuotaExceeded(replay);
+      }
+      return false;
+    }
+  }
+
+  /**
+   * Get a specific replay by ID.
+   * @param id - The replay ID to find
+   * @returns The replay data or null if not found
+   */
+  getReplayById(id: string): ReplayData | null {
+    const replays = this.getReplays();
+    return replays.find((r) => r.id === id) ?? null;
+  }
+
+  /**
+   * Delete a replay by ID.
+   * @param id - The replay ID to delete
+   * @returns true if deleted, false if not found
+   */
+  deleteReplay(id: string): boolean {
+    const replays = this.getReplays();
+    const filtered = replays.filter((r) => r.id !== id);
+
+    if (filtered.length === replays.length) {
+      return false; // Not found
+    }
+
+    localStorage.setItem(REPLAYS_KEY, JSON.stringify(filtered));
+    return true;
+  }
+
+  /**
+   * Clear all replays.
+   */
+  clearReplays(): void {
+    localStorage.removeItem(REPLAYS_KEY);
+  }
+
+  /**
+   * Sort replays by date (newest first).
+   */
+  private sortReplaysByDate(replays: ReplayData[]): ReplayData[] {
+    return [...replays].sort(
+      (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  }
+
+  /**
+   * Handle quota exceeded for replays.
+   */
+  private handleReplayQuotaExceeded(replay: ReplayData): boolean {
+    try {
+      // Keep fewer replays to make room
+      const replays = this.getReplays();
+      replays.push(replay);
+      const sortedReplays = this.sortReplaysByDate(replays).slice(
+        0,
+        MAX_REPLAYS - 2
+      );
+      localStorage.setItem(REPLAYS_KEY, JSON.stringify(sortedReplays));
       return true;
     } catch {
       return false;

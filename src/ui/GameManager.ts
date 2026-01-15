@@ -14,6 +14,9 @@ import type {
   LineClearResult,
   GameStats,
   HighScoreEntry,
+  ReplayData,
+  ReplayPlaybackState,
+  ReplaySpeed,
 } from '../types/index.ts';
 import { DEFAULT_CONFIG } from '../types/index.ts';
 import { Board } from '../game/Board.ts';
@@ -28,6 +31,7 @@ import { GameLoop } from '../systems/GameLoop.ts';
 import { InputHandler } from '../systems/InputHandler.ts';
 import type { Storage } from '../storage/Storage.ts';
 import { getStorage } from '../storage/Storage.ts';
+import { ReplaySystem } from '../systems/ReplaySystem.ts';
 
 /** Font style for FPS counter display */
 const FPS_FONT = '12px monospace';
@@ -40,9 +44,9 @@ const TRANSITION_DURATION = 300;
  */
 const MAIN_MENU_ITEMS: MenuItem[] = [
   { label: 'Start Game', action: 'start' },
+  { label: 'Replays', action: 'replays' },
   { label: 'Rankings', action: 'rankings' },
   { label: 'Settings', action: 'settings' },
-  { label: 'Statistics', action: 'statistics' },
 ];
 
 /**
@@ -53,6 +57,12 @@ const GAME_OVER_MENU_ITEMS: MenuItem[] = [
   { label: 'Rankings', action: 'rankings' },
   { label: 'Main Menu', action: 'menu' },
 ];
+
+/**
+ * Available replay playback speeds.
+ * Note: Must be kept in sync with ReplaySpeed type in types/index.ts.
+ */
+const REPLAY_SPEEDS: ReplaySpeed[] = [0.5, 1, 2];
 
 /**
  * Internal game state during play.
@@ -122,6 +132,12 @@ export class GameManager {
   private rankingHighlightIndex = -1;
   private rankingScoresCache: HighScoreEntry[] = [];
 
+  // Replay state
+  private replaySystem: ReplaySystem;
+  private replaysCache: ReplayData[] = [];
+  private replaySelectedIndex = 0;
+  private replayPlayback: ReplayPlaybackState | null = null;
+
   // Event listener references for cleanup
   private readonly boundHandleVisibilityChange: () => void;
   private readonly boundHandleWindowBlur: () => void;
@@ -138,6 +154,12 @@ export class GameManager {
     this.inputHandler = new InputHandler();
     this.storage = getStorage();
     this.announcer = document.getElementById('game-announcements');
+    if (!this.announcer) {
+      console.warn(
+        'GameManager: #game-announcements element not found. Screen reader announcements will be disabled.'
+      );
+    }
+    this.replaySystem = new ReplaySystem();
 
     // Bind event handlers for later cleanup
     this.boundHandleVisibilityChange = this.handleVisibilityChange.bind(this);
@@ -245,6 +267,10 @@ export class GameManager {
       this.handleNameInputNavigation(e);
     } else if (this.state === 'ranking') {
       this.handleRankingNavigation(e);
+    } else if (this.state === 'replay-select') {
+      this.handleReplaySelectNavigation(e);
+    } else if (this.state === 'replay') {
+      this.handleReplayNavigation(e);
     }
   }
 
@@ -315,14 +341,14 @@ export class GameManager {
       case 'start':
         this.startGame();
         break;
+      case 'replays':
+        this.showReplaySelect();
+        break;
       case 'rankings':
         this.showRanking();
         break;
       case 'settings':
         this.announce('Settings - Coming soon');
-        break;
-      case 'statistics':
-        this.announce('Statistics - Coming soon');
         break;
     }
   }
@@ -360,11 +386,14 @@ export class GameManager {
 
   /**
    * Initialize play state for a new game.
+   * @param seed - Optional seed for replay playback
    */
-  private initPlayState(): void {
+  private initPlayState(seed?: number): void {
+    const randomizer = seed !== undefined ? new Randomizer(seed) : new Randomizer();
+
     this.playState = {
       board: new Board(),
-      randomizer: new Randomizer(),
+      randomizer,
       scoreManager: new ScoreManager(),
       currentTetromino: null,
       dropTimer: 0,
@@ -377,6 +406,11 @@ export class GameManager {
         holdUsed: false,
       },
     };
+
+    // Start recording if not in replay mode
+    if (seed === undefined) {
+      this.replaySystem.startRecording(randomizer.getSeed());
+    }
   }
 
   /**
@@ -474,6 +508,132 @@ export class GameManager {
   }
 
   /**
+   * Show replay selection screen.
+   */
+  private showReplaySelect(): void {
+    this.startTransition('fade-out', () => {
+      this.replaysCache = this.storage.getReplays();
+      this.replaySelectedIndex = 0;
+      this.state = 'replay-select';
+      this.startTransition('fade-in');
+    });
+  }
+
+  /**
+   * Handle replay selection screen keyboard navigation.
+   */
+  private handleReplaySelectNavigation(e: KeyboardEvent): void {
+    switch (e.key) {
+      case 'ArrowUp':
+        e.preventDefault();
+        if (this.replaysCache.length > 0) {
+          this.replaySelectedIndex =
+            (this.replaySelectedIndex - 1 + this.replaysCache.length) %
+            this.replaysCache.length;
+        }
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        if (this.replaysCache.length > 0) {
+          this.replaySelectedIndex =
+            (this.replaySelectedIndex + 1) % this.replaysCache.length;
+        }
+        break;
+      case 'Enter':
+        e.preventDefault();
+        if (this.replaysCache.length > 0) {
+          this.startReplayPlayback();
+        }
+        break;
+      case 'Escape':
+        e.preventDefault();
+        this.goToMenu();
+        break;
+    }
+  }
+
+  /**
+   * Start replay playback.
+   */
+  private startReplayPlayback(): void {
+    const replay = this.replaysCache[this.replaySelectedIndex];
+    if (!replay) return;
+
+    this.startTransition('fade-out', () => {
+      this.initPlayState(replay.seed);
+      this.replayPlayback = ReplaySystem.createPlaybackState(replay);
+      this.state = 'replay';
+      this.announce('リプレイ再生開始');
+      this.startTransition('fade-in');
+    });
+  }
+
+  /**
+   * Handle replay playback keyboard navigation.
+   */
+  private handleReplayNavigation(e: KeyboardEvent): void {
+    if (!this.replayPlayback) return;
+
+    switch (e.key) {
+      case ' ':
+        e.preventDefault();
+        if (this.replayPlayback.finished) {
+          this.exitReplay();
+        } else {
+          ReplaySystem.togglePause(this.replayPlayback);
+          this.announce(this.replayPlayback.paused ? 'リプレイ一時停止' : 'リプレイ再生中');
+        }
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        this.changeReplaySpeed(-1);
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        this.changeReplaySpeed(1);
+        break;
+      case 'Escape':
+        e.preventDefault();
+        this.exitReplay();
+        break;
+      default:
+        // Any key exits when finished
+        if (this.replayPlayback.finished) {
+          e.preventDefault();
+          this.exitReplay();
+        }
+        break;
+    }
+  }
+
+  /**
+   * Change replay playback speed.
+   */
+  private changeReplaySpeed(direction: number): void {
+    if (!this.replayPlayback) return;
+
+    const currentIndex = REPLAY_SPEEDS.indexOf(this.replayPlayback.speed);
+    const newIndex = Math.max(0, Math.min(REPLAY_SPEEDS.length - 1, currentIndex + direction));
+    const newSpeed = REPLAY_SPEEDS[newIndex];
+    if (newSpeed !== undefined && newSpeed !== this.replayPlayback.speed) {
+      ReplaySystem.setSpeed(this.replayPlayback, newSpeed);
+      this.announce(`再生速度 ${newSpeed}倍`);
+    }
+  }
+
+  /**
+   * Exit replay playback.
+   */
+  private exitReplay(): void {
+    this.startTransition('fade-out', () => {
+      this.playState = null;
+      this.replayPlayback = null;
+      this.state = 'replay-select';
+      this.startTransition('fade-in');
+    });
+  }
+
+  /**
    * Cancel name input and go to game over screen.
    */
   private cancelNameInput(): void {
@@ -521,6 +681,16 @@ export class GameManager {
       this.gameOverSelectedIndex = 0;
       this.announce('ゲームオーバー');
       return;
+    }
+
+    // Stop recording and save replay
+    if (this.replaySystem.isRecording()) {
+      const replayData = this.replaySystem.stopRecording(
+        stats.score,
+        stats.level,
+        stats.lines
+      );
+      this.storage.saveReplay(replayData);
     }
 
     if (this.storage.isHighScore(stats.score)) {
@@ -580,6 +750,8 @@ export class GameManager {
     if (this.transition.active) return;
 
     if (this.state === 'playing') {
+      // Record action for replay
+      this.replaySystem.recordAction(action);
       this.handlePlayInput(action);
     }
   }
@@ -808,6 +980,12 @@ export class GameManager {
       }
     }
 
+    // Handle replay playback
+    if (this.state === 'replay' && this.replayPlayback && this.playState) {
+      this.updateReplayPlayback(deltaTime);
+      return;
+    }
+
     if (this.state !== 'playing' || !this.playState) return;
 
     // Spawn first tetromino if needed
@@ -837,6 +1015,71 @@ export class GameManager {
       this.playState.dropTimer = 0;
       this.tryMove(0, 1);
     }
+  }
+
+  /**
+   * Update replay playback.
+   */
+  private updateReplayPlayback(deltaTime: number): void {
+    if (!this.replayPlayback || !this.playState) return;
+
+    // Get triggered actions from replay
+    const actions = ReplaySystem.updatePlayback(this.replayPlayback, deltaTime);
+
+    // Process each action
+    for (const action of actions) {
+      // Skip pause actions during replay
+      if (action === 'pause') continue;
+      this.handlePlayInput(action);
+    }
+
+    // Spawn first tetromino if needed
+    if (!this.playState.currentTetromino) {
+      this.spawnTetromino();
+      return;
+    }
+
+    // Check if grounded
+    this.playState.isGrounded = this.checkGrounded();
+
+    if (this.playState.isGrounded) {
+      this.playState.lockTimer -= deltaTime;
+      if (this.playState.lockTimer <= 0) {
+        this.lockPieceForReplay();
+        return;
+      }
+    } else {
+      this.playState.lockTimer = DEFAULT_CONFIG.timing.lockDelay;
+    }
+
+    // Update drop timer with level-based speed
+    this.playState.dropTimer += deltaTime;
+    const dropInterval = this.playState.scoreManager.fallSpeed;
+
+    if (this.playState.dropTimer >= dropInterval) {
+      this.playState.dropTimer = 0;
+      this.tryMove(0, 1);
+    }
+  }
+
+  /**
+   * Lock piece during replay (no game over handling).
+   */
+  private lockPieceForReplay(): void {
+    if (!this.playState?.currentTetromino) return;
+
+    const result = this.performLineClear();
+    this.playState.scoreManager.processLineClear(result);
+
+    // Check for game over but don't transition state
+    if (this.playState.board.isOverflowing()) {
+      if (this.replayPlayback) {
+        this.replayPlayback.finished = true;
+      }
+      return;
+    }
+
+    this.spawnTetromino();
   }
 
   /**
@@ -888,6 +1131,23 @@ export class GameManager {
           this.rankingScoresCache,
           this.rankingHighlightIndex
         );
+        break;
+
+      case 'replay-select':
+        this.uiRenderer.renderReplaySelect(
+          this.replaysCache,
+          this.replaySelectedIndex
+        );
+        break;
+
+      case 'replay':
+        this.renderGameplay();
+        if (this.replayPlayback) {
+          this.uiRenderer.renderReplayHUD(this.replayPlayback);
+          if (this.replayPlayback.finished) {
+            this.uiRenderer.renderReplayFinished();
+          }
+        }
         break;
     }
 

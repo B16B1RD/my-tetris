@@ -10,8 +10,11 @@ import type {
   TransitionState,
   GameStats,
   HighScoreEntry,
+  ReplayData,
+  ReplayPlaybackState,
 } from '../types/index.ts';
 import { DEFAULT_UI_CONFIG, DEFAULT_CONFIG } from '../types/index.ts';
+import { ReplaySystem } from '../systems/ReplaySystem.ts';
 import { MAX_HIGH_SCORES } from '../storage/Storage.ts';
 
 /** Font sizes used in UI rendering */
@@ -37,6 +40,12 @@ const FONT_SIZES = {
   nameInputTitle: 32,
   nameInputLabel: 20,
   nameInputValue: 36,
+  // Replay screen
+  replaySelectTitle: 36,
+  replayEntry: 16,
+  replayEntrySelected: 16,
+  replayHud: 14,
+  replayHudSpeed: 18,
 } as const;
 
 /** Layout spacing values */
@@ -77,6 +86,38 @@ const LAYOUT = {
   nameInputValueY: 290,
   nameInputCursorWidth: 20,
   nameInputCursorOffsetY: 15,
+  /** Replay select screen layout */
+  replaySelectTitleY: 50,
+  replayListY: 100,
+  replayRowHeight: 55,
+  replayEmptyY: 250,
+  /** Replay HUD layout */
+  replayHudPadding: 10,
+  replayHudBarHeight: 4,
+  replayHudBarWidth: 200,
+  replayHudTopBarHeight: 35,
+  replayHudBottomBarHeight: 30,
+  replayHudTopTextY: 18,
+  replayHudProgressBarX: 120,
+  /**
+   * Replay select screen item layout.
+   * Note: replayListPaddingX is left padding, replayListItemPaddingX is right padding
+   * for the highlight background. Different values create a visual indent effect.
+   */
+  replayListPaddingX: 20,
+  replayListItemPaddingX: 40,
+  replaySelectorX: 30,
+  replayDateX: 50,
+  replayScoreOffsetX: 120,
+  replayDurationOffsetX: 30,
+  replayLevelInfoOffsetY: 18,
+  /** Replay HUD bottom text Y offset from bottomY */
+  replayHudBottomTextY: 15,
+  /** Replay HUD progress bar Y offset from bottomY */
+  replayHudProgressBarY: 12,
+  /** Replay finished screen layout */
+  replayFinishedTitleOffsetY: -20,
+  replayFinishedTextOffsetY: 30,
 } as const;
 
 /** Colors for UI elements */
@@ -86,6 +127,10 @@ const UI_COLORS = {
   rankingNew: '#ffdd00',
   rankingHeader: '#888888',
   nameInputCursor: '#00ffff',
+  replayProgress: '#00ffff',
+  replayProgressBg: '#333333',
+  replayPaused: '#ffaa00',
+  replaySelectHighlight: 'rgba(0, 255, 255, 0.1)',
 } as const;
 
 /**
@@ -99,6 +144,8 @@ export class UIRenderer {
   private readonly config: UIOverlayConfig;
   /** Cached width of "AAA" text for name input cursor positioning */
   private nameInputTextWidth: number | null = null;
+  /** Cached character width for name input (monospace assumption for cursor positioning) */
+  private nameInputCharWidth: number | null = null;
 
   constructor(
     ctx: CanvasRenderingContext2D,
@@ -375,7 +422,11 @@ export class UIRenderer {
 
     // Blinking cursor
     if (showCursor && currentName.length < 3) {
-      const cursorX = nameX + this.ctx.measureText(currentName).width;
+      // Cache character width to avoid measureText per frame
+      if (this.nameInputCharWidth === null) {
+        this.nameInputCharWidth = this.ctx.measureText('A').width;
+      }
+      const cursorX = nameX + this.nameInputCharWidth * currentName.length;
       this.ctx.fillStyle = UI_COLORS.nameInputCursor;
       this.ctx.fillRect(
         cursorX,
@@ -394,6 +445,180 @@ export class UIRenderer {
       this.width / 2,
       this.height - LAYOUT.instructionBottomMargin
     );
+  }
+
+  /**
+   * Render the replay selection screen.
+   * @param replays - Array of saved replays
+   * @param selectedIndex - Currently selected replay index
+   */
+  renderReplaySelect(replays: ReplayData[], selectedIndex: number): void {
+    this.drawOverlayBackground();
+
+    // Title
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.replaySelectTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('REPLAYS', this.width / 2, LAYOUT.replaySelectTitleY);
+
+    if (replays.length === 0) {
+      // No replays message
+      this.ctx.fillStyle = UI_COLORS.hintText;
+      this.ctx.font = `${FONT_SIZES.replayEntry}px ${this.config.fontFamily}`;
+      this.ctx.fillText('リプレイがありません', this.width / 2, LAYOUT.replayEmptyY);
+    } else {
+      // Replay entries
+      for (let i = 0; i < replays.length; i++) {
+        const replay = replays[i];
+        if (!replay) continue;
+
+        const y = LAYOUT.replayListY + i * LAYOUT.replayRowHeight;
+        const isSelected = i === selectedIndex;
+
+        // Background highlight for selected
+        // Note: Width calculation intentionally uses different padding values to create
+        // a visual indent effect (left: replayListPaddingX, right: replayListItemPaddingX)
+        if (isSelected) {
+          this.ctx.fillStyle = UI_COLORS.replaySelectHighlight;
+          this.ctx.fillRect(
+            LAYOUT.replayListPaddingX,
+            y - 20,
+            this.width - LAYOUT.replayListItemPaddingX,
+            LAYOUT.replayRowHeight - 5
+          );
+
+          // Selection indicator
+          this.ctx.fillStyle = this.config.highlightColor;
+          this.ctx.font = `bold ${FONT_SIZES.replayEntrySelected}px ${this.config.fontFamily}`;
+          this.ctx.textAlign = 'left';
+          this.ctx.fillText('▶', LAYOUT.replaySelectorX, y);
+        }
+
+        // Replay info
+        this.ctx.fillStyle = isSelected ? this.config.highlightColor : this.config.textColor;
+        this.ctx.font = isSelected
+          ? `bold ${FONT_SIZES.replayEntrySelected}px ${this.config.fontFamily}`
+          : `${FONT_SIZES.replayEntry}px ${this.config.fontFamily}`;
+        this.ctx.textAlign = 'left';
+
+        // Date (formatted) - year omitted as MAX_REPLAYS=5 keeps only recent replays
+        const date = new Date(replay.date);
+        const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        this.ctx.fillText(dateStr, LAYOUT.replayDateX, y);
+
+        // Score
+        this.ctx.textAlign = 'right';
+        this.ctx.fillText(
+          `${replay.finalScore.toLocaleString()} pts`,
+          this.width - LAYOUT.replayScoreOffsetX,
+          y
+        );
+
+        // Duration
+        this.ctx.fillStyle = isSelected ? this.config.textColor : UI_COLORS.hintText;
+        this.ctx.fillText(
+          ReplaySystem.formatTime(replay.duration),
+          this.width - LAYOUT.replayDurationOffsetX,
+          y
+        );
+
+        // Level info (second line)
+        this.ctx.textAlign = 'left';
+        this.ctx.fillStyle = UI_COLORS.hintText;
+        this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+        this.ctx.fillText(
+          `Lv.${replay.finalLevel} / ${replay.finalLines} lines`,
+          LAYOUT.replayDateX,
+          y + LAYOUT.replayLevelInfoOffsetY
+        );
+      }
+    }
+
+    // Instructions
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.fillText(
+      '↑↓: 選択  Enter: 再生  Esc: 戻る',
+      this.width / 2,
+      this.height - LAYOUT.instructionBottomMargin
+    );
+  }
+
+  /**
+   * Render the replay playback HUD overlay.
+   * @param state - Current replay playback state
+   */
+  renderReplayHUD(state: ReplayPlaybackState): void {
+    const padding = LAYOUT.replayHudPadding;
+
+    // Top bar with "REPLAY" indicator and speed
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(0, 0, this.width, LAYOUT.replayHudTopBarHeight);
+
+    // "REPLAY" text
+    this.ctx.fillStyle = state.paused ? UI_COLORS.replayPaused : this.config.highlightColor;
+    this.ctx.font = `bold ${FONT_SIZES.replayHud}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'left';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText(state.paused ? '▐▐ PAUSED' : '▶ REPLAY', padding, LAYOUT.replayHudTopTextY);
+
+    // Speed indicator
+    this.ctx.fillStyle = this.config.textColor;
+    this.ctx.font = `bold ${FONT_SIZES.replayHudSpeed}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'right';
+    this.ctx.fillText(`${state.speed}x`, this.width - padding, LAYOUT.replayHudTopTextY);
+
+    // Bottom bar with progress
+    const bottomY = this.height - LAYOUT.replayHudBottomBarHeight;
+    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    this.ctx.fillRect(0, bottomY, this.width, LAYOUT.replayHudBottomBarHeight);
+
+    // Time display
+    const currentTimeStr = ReplaySystem.formatTime(state.currentTime);
+    const totalTimeStr = ReplaySystem.formatTime(state.replay.duration);
+    this.ctx.fillStyle = this.config.textColor;
+    this.ctx.font = `${FONT_SIZES.replayHud}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'left';
+    this.ctx.fillText(`${currentTimeStr} / ${totalTimeStr}`, padding, bottomY + LAYOUT.replayHudBottomTextY);
+
+    // Progress bar
+    const barX = LAYOUT.replayHudProgressBarX;
+    const barWidth = LAYOUT.replayHudBarWidth;
+    const barY = bottomY + LAYOUT.replayHudProgressBarY;
+
+    // Background
+    this.ctx.fillStyle = UI_COLORS.replayProgressBg;
+    this.ctx.fillRect(barX, barY, barWidth, LAYOUT.replayHudBarHeight);
+
+    // Progress
+    const progress = ReplaySystem.getProgress(state) / 100;
+    this.ctx.fillStyle = UI_COLORS.replayProgress;
+    this.ctx.fillRect(barX, barY, barWidth * progress, LAYOUT.replayHudBarHeight);
+
+    // Controls hint
+    this.ctx.fillStyle = UI_COLORS.hintText;
+    this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'right';
+    this.ctx.fillText('Space: 再生/一時停止  ←→: 速度  Esc: 終了', this.width - padding, bottomY + LAYOUT.replayHudBottomTextY);
+  }
+
+  /**
+   * Render the replay finished overlay.
+   */
+  renderReplayFinished(): void {
+    this.drawOverlayBackground();
+
+    this.ctx.fillStyle = this.config.titleColor;
+    this.ctx.font = `bold ${FONT_SIZES.pauseTitle}px ${this.config.fontFamily}`;
+    this.ctx.textAlign = 'center';
+    this.ctx.textBaseline = 'middle';
+    this.ctx.fillText('REPLAY FINISHED', this.width / 2, this.height / 2 + LAYOUT.replayFinishedTitleOffsetY);
+
+    this.ctx.fillStyle = this.config.textColor;
+    this.ctx.font = `${FONT_SIZES.pauseInstruction}px ${this.config.fontFamily}`;
+    this.ctx.fillText('何かキーを押して続ける', this.width / 2, this.height / 2 + LAYOUT.replayFinishedTextOffsetY);
   }
 
   /**
