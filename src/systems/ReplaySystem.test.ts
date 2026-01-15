@@ -66,6 +66,20 @@ describe('ReplaySystem', () => {
       expect(replayData.events[0]?.timestamp).toBeGreaterThanOrEqual(0);
       expect(replayData.events[0]?.action).toBe('moveLeft');
     });
+
+    it('should reset state when startRecording is called again', () => {
+      replaySystem.startRecording(11111);
+      replaySystem.recordAction('moveLeft');
+      replaySystem.recordAction('moveRight');
+      expect(replaySystem.getEventCount()).toBe(2);
+
+      // Start recording again with new seed
+      replaySystem.startRecording(22222);
+
+      expect(replaySystem.isRecording()).toBe(true);
+      expect(replaySystem.getSeed()).toBe(22222);
+      expect(replaySystem.getEventCount()).toBe(0); // Events should be reset
+    });
   });
 
   describe('Playback', () => {
@@ -153,6 +167,25 @@ describe('ReplaySystem', () => {
       expect(playbackState.finished).toBe(true);
     });
 
+    it('should mark finished at exact duration boundary', () => {
+      // Update to exactly duration (1000ms)
+      ReplaySystem.updatePlayback(playbackState, 1000);
+
+      expect(playbackState.finished).toBe(true);
+      expect(playbackState.nextEventIndex).toBe(4); // All events processed
+    });
+
+    it('should return empty array when already finished', () => {
+      // First, finish the playback
+      ReplaySystem.updatePlayback(playbackState, 1100);
+      expect(playbackState.finished).toBe(true);
+
+      // Subsequent calls should return empty array and not change state
+      const actions = ReplaySystem.updatePlayback(playbackState, 100);
+      expect(actions).toEqual([]);
+      expect(playbackState.currentTime).toBe(1100); // Should not change
+    });
+
     it('should calculate progress percentage', () => {
       expect(ReplaySystem.getProgress(playbackState)).toBe(0);
 
@@ -160,6 +193,13 @@ describe('ReplaySystem', () => {
       expect(ReplaySystem.getProgress(playbackState)).toBe(50);
 
       ReplaySystem.updatePlayback(playbackState, 500);
+      expect(ReplaySystem.getProgress(playbackState)).toBe(100);
+    });
+
+    it('should cap progress at 100% when currentTime exceeds duration', () => {
+      // Fast forward way past duration
+      ReplaySystem.updatePlayback(playbackState, 2000);
+
       expect(ReplaySystem.getProgress(playbackState)).toBe(100);
     });
 

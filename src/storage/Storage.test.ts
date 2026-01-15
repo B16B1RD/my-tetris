@@ -678,6 +678,111 @@ describe('Storage', () => {
         expect(replays).toHaveLength(1);
         expect(replays[0]?.id).toBe('r2');
       });
+
+      it('should filter out replays with negative finalScore', () => {
+        const invalidData = [
+          {
+            id: 'r1',
+            seed: 123,
+            events: [],
+            finalScore: -100,
+            finalLevel: 1,
+            finalLines: 10,
+            date: '2024-01-01',
+            duration: 60000,
+          },
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
+
+      it('should filter out replays with finalLevel less than 1', () => {
+        const invalidData = [
+          {
+            id: 'r1',
+            seed: 123,
+            events: [],
+            finalScore: 1000,
+            finalLevel: 0,
+            finalLines: 10,
+            date: '2024-01-01',
+            duration: 60000,
+          },
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
+
+      it('should filter out replays with negative finalLines', () => {
+        const invalidData = [
+          {
+            id: 'r1',
+            seed: 123,
+            events: [],
+            finalScore: 1000,
+            finalLevel: 1,
+            finalLines: -5,
+            date: '2024-01-01',
+            duration: 60000,
+          },
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
+
+      it('should filter out replays with negative duration', () => {
+        const invalidData = [
+          {
+            id: 'r1',
+            seed: 123,
+            events: [],
+            finalScore: 1000,
+            finalLevel: 1,
+            finalLines: 10,
+            date: '2024-01-01',
+            duration: -1000,
+          },
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
+
+      it('should filter out replays with negative event timestamps', () => {
+        const invalidData = [
+          {
+            id: 'r1',
+            seed: 123,
+            events: [{ timestamp: -100, action: 'moveLeft' }],
+            finalScore: 1000,
+            finalLevel: 1,
+            finalLines: 10,
+            date: '2024-01-01',
+            duration: 60000,
+          },
+          createTestReplay('r2', 2000),
+        ];
+        localStorage.setItem('tetris_replays', JSON.stringify(invalidData));
+
+        const replays = storage.getReplays();
+        expect(replays).toHaveLength(1);
+        expect(replays[0]?.id).toBe('r2');
+      });
     });
   });
 });

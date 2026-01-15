@@ -95,6 +95,18 @@ const LAYOUT = {
   replayHudPadding: 10,
   replayHudBarHeight: 4,
   replayHudBarWidth: 200,
+  replayHudTopBarHeight: 35,
+  replayHudBottomBarHeight: 30,
+  replayHudTopTextY: 18,
+  replayHudProgressBarX: 120,
+  /** Replay select screen item layout */
+  replayListPaddingX: 20,
+  replayListItemPaddingX: 40,
+  replaySelectorX: 30,
+  replayDateX: 50,
+  replayScoreOffsetX: 120,
+  replayDurationOffsetX: 30,
+  replayLevelInfoOffsetY: 18,
 } as const;
 
 /** Colors for UI elements */
@@ -449,13 +461,18 @@ export class UIRenderer {
         // Background highlight for selected
         if (isSelected) {
           this.ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
-          this.ctx.fillRect(20, y - 20, this.width - 40, LAYOUT.replayRowHeight - 5);
+          this.ctx.fillRect(
+            LAYOUT.replayListPaddingX,
+            y - 20,
+            this.width - LAYOUT.replayListItemPaddingX,
+            LAYOUT.replayRowHeight - 5
+          );
 
           // Selection indicator
           this.ctx.fillStyle = this.config.highlightColor;
           this.ctx.font = `bold ${FONT_SIZES.replayEntrySelected}px ${this.config.fontFamily}`;
           this.ctx.textAlign = 'left';
-          this.ctx.fillText('▶', 30, y);
+          this.ctx.fillText('▶', LAYOUT.replaySelectorX, y);
         }
 
         // Replay info
@@ -468,21 +485,33 @@ export class UIRenderer {
         // Date (formatted)
         const date = new Date(replay.date);
         const dateStr = `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
-        this.ctx.fillText(dateStr, 50, y);
+        this.ctx.fillText(dateStr, LAYOUT.replayDateX, y);
 
         // Score
         this.ctx.textAlign = 'right';
-        this.ctx.fillText(`${replay.finalScore.toLocaleString()} pts`, this.width - 120, y);
+        this.ctx.fillText(
+          `${replay.finalScore.toLocaleString()} pts`,
+          this.width - LAYOUT.replayScoreOffsetX,
+          y
+        );
 
         // Duration
         this.ctx.fillStyle = isSelected ? this.config.textColor : UI_COLORS.hintText;
-        this.ctx.fillText(ReplaySystem.formatTime(replay.duration), this.width - 30, y);
+        this.ctx.fillText(
+          ReplaySystem.formatTime(replay.duration),
+          this.width - LAYOUT.replayDurationOffsetX,
+          y
+        );
 
         // Level info (second line)
         this.ctx.textAlign = 'left';
         this.ctx.fillStyle = UI_COLORS.hintText;
         this.ctx.font = `${FONT_SIZES.instruction}px ${this.config.fontFamily}`;
-        this.ctx.fillText(`Lv.${replay.finalLevel} / ${replay.finalLines} lines`, 50, y + 18);
+        this.ctx.fillText(
+          `Lv.${replay.finalLevel} / ${replay.finalLines} lines`,
+          LAYOUT.replayDateX,
+          y + LAYOUT.replayLevelInfoOffsetY
+        );
       }
     }
 
@@ -506,25 +535,25 @@ export class UIRenderer {
 
     // Top bar with "REPLAY" indicator and speed
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    this.ctx.fillRect(0, 0, this.width, 35);
+    this.ctx.fillRect(0, 0, this.width, LAYOUT.replayHudTopBarHeight);
 
     // "REPLAY" text
     this.ctx.fillStyle = state.paused ? UI_COLORS.replayPaused : this.config.highlightColor;
     this.ctx.font = `bold ${FONT_SIZES.replayHud}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'left';
     this.ctx.textBaseline = 'middle';
-    this.ctx.fillText(state.paused ? '▐▐ PAUSED' : '▶ REPLAY', padding, 18);
+    this.ctx.fillText(state.paused ? '▐▐ PAUSED' : '▶ REPLAY', padding, LAYOUT.replayHudTopTextY);
 
     // Speed indicator
     this.ctx.fillStyle = this.config.textColor;
     this.ctx.font = `bold ${FONT_SIZES.replayHudSpeed}px ${this.config.fontFamily}`;
     this.ctx.textAlign = 'right';
-    this.ctx.fillText(`${state.speed}x`, this.width - padding, 18);
+    this.ctx.fillText(`${state.speed}x`, this.width - padding, LAYOUT.replayHudTopTextY);
 
     // Bottom bar with progress
-    const bottomY = this.height - 30;
+    const bottomY = this.height - LAYOUT.replayHudBottomBarHeight;
     this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-    this.ctx.fillRect(0, bottomY, this.width, 30);
+    this.ctx.fillRect(0, bottomY, this.width, LAYOUT.replayHudBottomBarHeight);
 
     // Time display
     const currentTimeStr = ReplaySystem.formatTime(state.currentTime);
@@ -535,7 +564,7 @@ export class UIRenderer {
     this.ctx.fillText(`${currentTimeStr} / ${totalTimeStr}`, padding, bottomY + 15);
 
     // Progress bar
-    const barX = 120;
+    const barX = LAYOUT.replayHudProgressBarX;
     const barWidth = LAYOUT.replayHudBarWidth;
     const barY = bottomY + 12;
 

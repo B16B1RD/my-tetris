@@ -278,7 +278,11 @@ export class Storage {
       Number.isFinite(obj.finalScore) &&
       Number.isFinite(obj.finalLevel) &&
       Number.isFinite(obj.finalLines) &&
-      Number.isFinite(obj.duration)
+      Number.isFinite(obj.duration) &&
+      obj.finalScore >= 0 &&
+      obj.finalLevel >= 1 &&
+      obj.finalLines >= 0 &&
+      obj.duration >= 0
     );
   }
 
@@ -294,7 +298,8 @@ export class Storage {
       typeof obj.timestamp === 'number' &&
       typeof obj.action === 'string' &&
       VALID_INPUT_ACTIONS.includes(obj.action as InputAction) &&
-      Number.isFinite(obj.timestamp)
+      Number.isFinite(obj.timestamp) &&
+      obj.timestamp >= 0
     );
   }
 
