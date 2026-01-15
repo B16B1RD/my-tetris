@@ -695,6 +695,8 @@ export class UIRenderer {
       const keyDisplay = keys.length > 0 ? keys[0] ?? '-' : '-';
 
       // Key background
+      // Note: measureText is called each frame but Settings screen is static,
+      // so performance impact is negligible. Consider caching if this becomes a bottleneck.
       this.ctx.fillStyle = UI_COLORS.settingsKeyBg;
       const keyText = this.formatKeyDisplay(keyDisplay);
       const keyWidth = Math.max(60, this.ctx.measureText(keyText).width + 20);
@@ -755,18 +757,18 @@ export class UIRenderer {
     this.ctx.textBaseline = 'middle';
     this.ctx.fillText('STATISTICS', this.width / 2, LAYOUT.statisticsTitleY);
 
-    // Statistics entries
+    // Statistics entries (Japanese labels for consistency with other UI text)
     const entries: { label: string; value: string }[] = [
-      { label: 'Total Play Time', value: this.formatPlayTime(stats.totalPlayTime) },
-      { label: 'Games Played', value: stats.gamesPlayed.toLocaleString() },
-      { label: 'Total Lines Cleared', value: stats.totalLinesCleared.toLocaleString() },
-      { label: 'Total Tetris', value: stats.totalTetris.toLocaleString() },
+      { label: '総プレイ時間', value: this.formatPlayTime(stats.totalPlayTime) },
+      { label: 'プレイ回数', value: stats.gamesPlayed.toLocaleString() },
+      { label: '総ライン消去', value: stats.totalLinesCleared.toLocaleString() },
+      { label: 'テトリス回数', value: stats.totalTetris.toLocaleString() },
       {
-        label: 'Tetris Rate',
+        label: 'テトリス率',
         value: this.calculateTetrisRate(stats.totalLinesCleared, stats.totalTetris),
       },
-      { label: 'Highest Level', value: stats.highestLevel.toString() },
-      { label: 'Total T-Spins', value: stats.totalTSpins.toLocaleString() },
+      { label: '最高レベル', value: stats.highestLevel.toString() },
+      { label: 'T-Spin 回数', value: stats.totalTSpins.toLocaleString() },
     ];
 
     entries.forEach((entry, index) => {
