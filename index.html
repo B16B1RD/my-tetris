@@ -80,6 +80,8 @@
     color: var(--accent);
   }
   .panel .value { font-size: 20px; font-weight: 800; }
+  .stat-row { display: flex; justify-content: space-between; font-size: 13px; margin-top: 6px; }
+  .stat-row b { color: var(--accent); }
   #hold-canvas, #next-canvas { display: block; }
   .hint { font-size: 11px; line-height: 1.6; opacity: 0.8; }
   #unsupported {
@@ -104,9 +106,15 @@
       <!-- SCORE 等の中身は Sub-5 で実装 -->
       <div class="panel" id="panel-hold"><h2>Hold</h2><canvas id="hold-canvas"></canvas></div>
       <div class="panel" id="panel-next"><h2>Next</h2><canvas id="next-canvas"></canvas></div>
+      <div class="panel" id="panel-score">
+        <h2>Score</h2>
+        <div class="value" id="score-val">0</div>
+        <div class="stat-row"><span>Lines</span><b id="lines-val">0</b></div>
+        <div class="stat-row"><span>Level</span><b id="level-val">1</b></div>
+      </div>
       <div class="panel" id="panel-stats">
-        <h2>Status</h2>
-        <div class="hint">ホールド: C / Shift<br>ゴースト表示中</div>
+        <h2>Controls</h2>
+        <div class="hint">← → 移動 / ↓ ソフト<br>Space ハードドロップ<br>X・↑ 右回転 / Z 左回転<br>C・Shift ホールド</div>
       </div>
     </aside>
   </div>
@@ -187,18 +195,29 @@ const game = {
   bag: [],             // 現在の bag 残り
   holdPiece: null,     // 退避中のミノ type（無ければ null）
   holdUsed: false,     // 当該ピースで hold 済みか（lock でリセット）
-  // stats / gameState は後続で追加
+  stats: { score: 0, lines: 0, level: 1 },
+  backToBack: false,   // 直近の難消去（テトリス）が連続しているか
+  lockTimer: 0,        // 接地後のロックダウン経過（ms）
+  lockResets: 0,       // move reset の使用回数（infinity 制限）
+  // gameState は Sub-6
   dropTimer: 0,        // 自動落下の累積時間（ms）
   topOut: false,       // スポーン不能（ゲームオーバー条件。判定/遷移は Sub-6）
   time: 0,             // 累積シミュレーション時間（ms）
   frames: 0,           // 描画フレーム数（liveness 確認用）
 };
 
-/* 自動落下間隔（ms/セル）。レベル連動は Sub-5 で置換 */
-const DROP_INTERVAL_MS = 800;
-const SOFT_DROP_FACTOR = 12;   // ソフトドロップ時の加速倍率
+const SOFT_DROP_FACTOR = 20;   // ソフトドロップ時の加速倍率
 let softDropping = false;
-const NEXT_PREVIEW = 5;        // 先読み表示数（表示は Sub-4）
+const NEXT_PREVIEW = 5;        // 先読み表示数
+const LOCK_DELAY_MS = 500;     // ロックダウン遅延
+const MAX_LOCK_RESETS = 15;    // move reset 上限（infinity 制限）
+const LINES_PER_LEVEL = 10;    // レベルアップに要するライン数
+
+/** レベル別の重力間隔（ms/セル）。ガイドライン準拠の式 */
+function gravityForLevel(level) {
+  const t = Math.pow(0.8 - (level - 1) * 0.007, level - 1); // 秒/セル
+  return Math.max(t * 1000, 16);
+}
 
 /* ---------------------------------------------------------------------
  * 3b. テトリミノ定義（Sub-2）
@@ -361,13 +380,37 @@ function getGhost(piece) {
   return g;
 }
 
+/* ---- ロックダウン補助（Sub-5） ---- */
+/** 1 セル下が衝突する＝接地している */
+function isGrounded() {
+  const p = game.activePiece;
+  if (!p) return false;
+  return collides(game.board, { ...p, y: p.y + 1 });
+}
+/** 接地中の移動/回転成功で lock タイマーをリセット（上限まで） */
+function onSuccessfulMove() {
+  if (isGrounded() && game.lockResets < MAX_LOCK_RESETS) {
+    game.lockResets++;
+    game.lockTimer = 0;
+  }
+}
+/** より低い行へ落下したらロック状態をリセット（Extended Placement） */
+function onMovedDown() {
+  game.lockResets = 0;
+  game.lockTimer = 0;
+}
+
 /* ---- ピース操作 ---- */
 /** dx 方向に水平移動（成功で true） */
 function moveHorizontal(dx) {
   const p = game.activePiece;
   if (!p) return false;
   const moved = { ...p, x: p.x + dx };
-  if (!collides(game.board, moved)) { game.activePiece = moved; return true; }
+  if (!collides(game.board, moved)) {
+    game.activePiece = moved;
+    onSuccessfulMove();
+    return true;
+  }
   return false;
 }
 /** 1 セル落下を試みる（成功で true、できなければ false=着地） */
@@ -378,23 +421,56 @@ function stepDown() {
   if (!collides(game.board, moved)) { game.activePiece = moved; return true; }
   return false;
 }
-/** ピースを盤面に固定し次ピースを出す */
+/* ---- ライン消去・スコア（Sub-5） ---- */
+/** 揃った行を消し上を詰める。消去数を返す */
+function clearLines() {
+  let cleared = 0;
+  for (let r = ROWS - 1; r >= 0; r--) {
+    if (game.board[r].every((cell) => cell !== null)) {
+      game.board.splice(r, 1);
+      game.board.unshift(new Array(COLS).fill(null));
+      cleared++;
+      r++; // 詰めた後、同じインデックスを再判定
+    }
+  }
+  return cleared;
+}
+/** 消去数に応じてスコア・ライン・レベルを更新 */
+const LINE_SCORE = { 1: 100, 2: 300, 3: 500, 4: 800 };
+function applyClear(cleared) {
+  const level = game.stats.level;
+  let pts = (LINE_SCORE[cleared] || 0) * level;
+  const difficult = cleared === 4; // テトリス（T-spin 加点は任意・未実装）
+  if (difficult && game.backToBack) pts = Math.floor(pts * 1.5);
+  game.stats.score += pts;
+  game.backToBack = difficult; // 難消去で継続、それ以外の消去で途切れる
+  game.stats.lines += cleared;
+  const newLevel = Math.floor(game.stats.lines / LINES_PER_LEVEL) + 1;
+  if (newLevel > game.stats.level) game.stats.level = newLevel;
+}
+
+/** ピースを盤面に固定し、ライン消去・スコア処理後に次ピースを出す */
 function lockPiece() {
   const p = game.activePiece;
   if (!p) return;
   for (const [row, col] of pieceCells(p)) setCell(game.board, row, col, p.type);
   game.activePiece = null;
+  const cleared = clearLines();
+  if (cleared > 0) applyClear(cleared);
+  game.lockTimer = 0;
+  game.lockResets = 0;
   spawnNext();
-  // ライン消去・スコアは Sub-5 で lock 後処理として追加
 }
-/** ソフトドロップ 1 セル（着地なら lock） */
+/** ソフトドロップ 1 セル（加点。ロックは lock delay に委ねる） */
 function softDropStep() {
-  if (!stepDown()) lockPiece();
+  if (stepDown()) { game.stats.score += 1; onMovedDown(); }
 }
-/** ハードドロップ: 最下到達まで即落下して lock */
+/** ハードドロップ: 最下到達まで即落下して即 lock（距離×2 加点） */
 function hardDrop() {
   if (!game.activePiece) return;
-  while (stepDown()) { /* 落下し続ける */ }
+  let dist = 0;
+  while (stepDown()) dist++;
+  game.stats.score += dist * 2;
   lockPiece();
 }
 
@@ -436,6 +512,7 @@ function rotate(dir) {
   if (p.type === "O") {
     // O は形状不変。状態だけ進めて占有セルは変えない
     game.activePiece = { ...p, rotation: (p.rotation + dir + 4) % 4 };
+    onSuccessfulMove();
     return true;
   }
   const from = p.rotation;
@@ -447,6 +524,7 @@ function rotate(dir) {
     const cand = { ...p, rotation: to, x: p.x + dx, y: p.y - dy };
     if (!collides(game.board, cand)) {
       game.activePiece = cand;
+      onSuccessfulMove();
       return true;
     }
   }
@@ -564,6 +642,17 @@ function render() {
   drawActivePiece();
   // 後続: 演出（Sub-7）
   drawPreviews();
+  renderStats();
+}
+
+/* ---- スコア/ライン/レベルの DOM 反映（Sub-5） ---- */
+const scoreEl = document.getElementById("score-val");
+const linesEl = document.getElementById("lines-val");
+const levelEl = document.getElementById("level-val");
+function renderStats() {
+  if (scoreEl) scoreEl.textContent = game.stats.score.toLocaleString();
+  if (linesEl) linesEl.textContent = game.stats.lines;
+  if (levelEl) levelEl.textContent = game.stats.level;
 }
 
 /* ---- サイドパネルのプレビュー描画（Hold / Next） ---- */
@@ -645,15 +734,28 @@ const MAX_FRAME_MS = 250;    // タブ復帰などの巨大 dt をクランプ
 let lastTs = 0;
 let accumulator = 0;
 
-/** 論理更新（1 ステップ）。重力による自動落下を処理 */
+/** 論理更新（1 ステップ）。重力による自動落下 + ロックダウン遅延を処理 */
 function update(dt) {
   game.time += dt;
   if (game.topOut || !game.activePiece) return;
-  const interval = softDropping ? DROP_INTERVAL_MS / SOFT_DROP_FACTOR : DROP_INTERVAL_MS;
+  const base = gravityForLevel(game.stats.level);
+  const interval = softDropping ? base / SOFT_DROP_FACTOR : base;
   game.dropTimer += dt;
   while (game.dropTimer >= interval) {
     game.dropTimer -= interval;
-    if (!stepDown()) { lockPiece(); break; }
+    if (stepDown()) {
+      onMovedDown();
+      if (softDropping) game.stats.score += 1; // ソフトドロップ加点
+    } else {
+      break; // 接地。lock 判定は下で行う
+    }
+  }
+  // ロックダウン遅延（接地中のみカウント。move reset は移動/回転側で処理）
+  if (isGrounded()) {
+    game.lockTimer += dt;
+    if (game.lockTimer >= LOCK_DELAY_MS) lockPiece();
+  } else {
+    game.lockTimer = 0;
   }
 }
 
@@ -707,7 +809,7 @@ function setupTempControls() {
     switch (e.key) {
       case "ArrowLeft":  moveHorizontal(-1); e.preventDefault(); break;
       case "ArrowRight": moveHorizontal(1);  e.preventDefault(); break;
-      case "ArrowDown":  softDropping = true; softDropStep(); e.preventDefault(); break;
+      case "ArrowDown":  softDropping = true; e.preventDefault(); break;
       case " ":          hardDrop(); e.preventDefault(); break;
       case "ArrowUp":
       case "x": case "X": rotate(1);  e.preventDefault(); break;   // CW
@@ -736,6 +838,9 @@ window.__tetris = {
   rotate, KICKS_JLSTZ, KICKS_I,
   // Sub-4
   hold, getGhost, NEXT_PREVIEW,
+  // Sub-5
+  clearLines, applyClear, isGrounded, gravityForLevel, update,
+  LOCK_DELAY_MS, MAX_LOCK_RESETS, LINES_PER_LEVEL,
 };
 </script>
 </body>
