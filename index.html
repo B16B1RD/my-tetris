@@ -80,6 +80,7 @@
     color: var(--accent);
   }
   .panel .value { font-size: 20px; font-weight: 800; }
+  #hold-canvas, #next-canvas { display: block; }
   .hint { font-size: 11px; line-height: 1.6; opacity: 0.8; }
   #unsupported {
     display: none;
@@ -100,12 +101,12 @@
       </div>
     </div>
     <aside class="side">
-      <!-- HOLD / NEXT は Sub-4、SCORE 等は Sub-5 で中身を実装 -->
-      <div class="panel" id="panel-hold"><h2>Hold</h2><div class="value" id="hold-box">—</div></div>
-      <div class="panel" id="panel-next"><h2>Next</h2><div class="value" id="next-box">—</div></div>
+      <!-- SCORE 等の中身は Sub-5 で実装 -->
+      <div class="panel" id="panel-hold"><h2>Hold</h2><canvas id="hold-canvas"></canvas></div>
+      <div class="panel" id="panel-next"><h2>Next</h2><canvas id="next-canvas"></canvas></div>
       <div class="panel" id="panel-stats">
         <h2>Status</h2>
-        <div class="hint">基盤実装（Sub-1）<br>盤面 + ゲームループ稼働中</div>
+        <div class="hint">ホールド: C / Shift<br>ゴースト表示中</div>
       </div>
     </aside>
   </div>
@@ -184,7 +185,9 @@ const game = {
   activePiece: null,   // { type, rotation, x, y }（x,y = バウンディングボックス左上）
   nextQueue: [],       // 7-bag 由来の先読みキュー
   bag: [],             // 現在の bag 残り
-  // hold / stats / gameState は後続で追加
+  holdPiece: null,     // 退避中のミノ type（無ければ null）
+  holdUsed: false,     // 当該ピースで hold 済みか（lock でリセット）
+  // stats / gameState は後続で追加
   dropTimer: 0,        // 自動落下の累積時間（ms）
   topOut: false,       // スポーン不能（ゲームオーバー条件。判定/遷移は Sub-6）
   time: 0,             // 累積シミュレーション時間（ms）
@@ -321,9 +324,41 @@ function spawnNext() {
   const piece = makePiece(type);
   game.activePiece = piece;
   game.dropTimer = 0;
+  game.holdUsed = false;  // 自然落下による新ピースで hold 解禁（Sub-4）
   if (collides(game.board, piece)) {
     game.topOut = true;   // ゲームオーバー条件（遷移は Sub-6）
   }
+}
+
+/* ---- ホールド（Sub-4。1 ピース 1 回制限） ---- */
+function hold() {
+  const p = game.activePiece;
+  if (!p || game.holdUsed) return;   // 同一ピースでの再ホールドは無効
+  const cur = p.type;
+  if (game.holdPiece === null) {
+    game.holdPiece = cur;
+    spawnNext();                     // 内部で holdUsed=false に戻る
+  } else {
+    const swap = game.holdPiece;
+    game.holdPiece = cur;
+    game.activePiece = makePiece(swap);
+    game.dropTimer = 0;
+    if (collides(game.board, game.activePiece)) game.topOut = true;
+  }
+  game.holdUsed = true;              // 両分岐とも最終的に true（次の lock まで再ホールド不可）
+}
+
+/* ---- ゴースト（Sub-4。着地予測位置） ---- */
+/** piece を衝突直前まで落とした位置のクローンを返す */
+function getGhost(piece) {
+  if (!piece) return null;
+  let g = { ...piece };
+  while (true) {
+    const moved = { ...g, y: g.y + 1 };
+    if (collides(game.board, moved)) break;
+    g = moved;
+  }
+  return g;
 }
 
 /* ---- ピース操作 ---- */
@@ -509,14 +544,97 @@ function drawActivePiece() {
   }
 }
 
+/** ゴースト（着地予測）の描画 */
+function drawGhost() {
+  const p = game.activePiece;
+  if (!p) return;
+  const g = getGhost(p);
+  if (!g) return;
+  for (const [row, col] of pieceCells(g)) {
+    if (row >= HIDDEN_ROWS) drawCell(col, row - HIDDEN_ROWS, g.type, 0.28);
+  }
+}
+
 /** 1 フレームの描画 */
 function render() {
   ctx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
   drawGrid();
   drawBoard();
-  // 後続: ゴースト（Sub-4）をここで重ねる
+  drawGhost();
   drawActivePiece();
   // 後続: 演出（Sub-7）
+  drawPreviews();
+}
+
+/* ---- サイドパネルのプレビュー描画（Hold / Next） ---- */
+const MINI = 18;        // プレビュー 1 セル
+const holdCanvas = document.getElementById("hold-canvas");
+const nextCanvas = document.getElementById("next-canvas");
+const holdCtx = holdCanvas ? holdCanvas.getContext("2d") : null;
+const nextCtx = nextCanvas ? nextCanvas.getContext("2d") : null;
+
+/** プレビュー canvas を DPR 対応でサイズ設定 */
+function setupPreviewCanvas(cv, c, wCells, hCells) {
+  if (!cv || !c) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w = wCells * MINI, h = hCells * MINI;
+  cv.width = Math.round(w * dpr);
+  cv.height = Math.round(h * dpr);
+  cv.style.width = w + "px";
+  cv.style.height = h + "px";
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+/** 1 つのミノを (cellX,cellY) を原点に、与えた幅で中央寄せして描く */
+function drawMiniPiece(c, type, originX, originY, slotCols) {
+  const cells = PIECE_STATES[type][0];
+  let minR = Infinity, maxR = -Infinity, minC = Infinity, maxC = -Infinity;
+  for (const [r, col] of cells) {
+    minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+    minC = Math.min(minC, col); maxC = Math.max(maxC, col);
+  }
+  const pw = maxC - minC + 1, ph = maxR - minR + 1;
+  const offX = originX + (slotCols - pw) / 2 * MINI;
+  const offY = originY + (2 - ph) / 2 * MINI;   // スロット高 2 行基準で縦中央
+  const pal = PALETTE[type];
+  for (const [r, col] of cells) {
+    const x = offX + (col - minC) * MINI;
+    const y = offY + (r - minR) * MINI;
+    const pad = 1.2, rr = 5;
+    miniRoundRect(c, x + pad, y + pad, MINI - pad * 2, MINI - pad * 2, rr);
+    c.fillStyle = pal.fill; c.fill();
+    c.lineWidth = 2; c.strokeStyle = pal.edge; c.stroke();
+  }
+}
+function miniRoundRect(c, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  c.beginPath();
+  c.moveTo(x + rr, y);
+  c.arcTo(x + w, y, x + w, y + h, rr);
+  c.arcTo(x + w, y + h, x, y + h, rr);
+  c.arcTo(x, y + h, x, y, rr);
+  c.arcTo(x, y, x + w, y, rr);
+  c.closePath();
+}
+
+function drawPreviews() {
+  // Hold: 4 列 × 2 行
+  if (holdCtx) {
+    holdCtx.clearRect(0, 0, holdCanvas.width, holdCanvas.height);
+    if (game.holdPiece) {
+      holdCtx.globalAlpha = game.holdUsed ? 0.4 : 1;   // 使用済みは薄く
+      drawMiniPiece(holdCtx, game.holdPiece, 0, 0, 4);
+      holdCtx.globalAlpha = 1;
+    }
+  }
+  // Next: 先読み 5 個、各スロット 4 列 × 3 行
+  if (nextCtx) {
+    nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+    const show = game.nextQueue.slice(0, NEXT_PREVIEW);
+    for (let i = 0; i < show.length; i++) {
+      drawMiniPiece(nextCtx, show[i], 0, i * 3 * MINI + 0.5 * MINI, 4);
+    }
+  }
 }
 
 /* ---------------------------------------------------------------------
@@ -566,8 +684,14 @@ function boot() {
     return;
   }
   setupCanvas();
+  setupPreviewCanvas(holdCanvas, holdCtx, 4, 2);
+  setupPreviewCanvas(nextCanvas, nextCtx, 4, NEXT_PREVIEW * 3);
   // DPR 変化（ディスプレイ間移動 / ズーム）に追従
-  window.addEventListener("resize", setupCanvas);
+  window.addEventListener("resize", () => {
+    setupCanvas();
+    setupPreviewCanvas(holdCanvas, holdCtx, 4, 2);
+    setupPreviewCanvas(nextCanvas, nextCtx, 4, NEXT_PREVIEW * 3);
+  });
   // 初期ピース出現
   refillBag();
   ensureQueue();
@@ -588,6 +712,7 @@ function setupTempControls() {
       case "ArrowUp":
       case "x": case "X": rotate(1);  e.preventDefault(); break;   // CW
       case "z": case "Z": rotate(-1); e.preventDefault(); break;   // CCW
+      case "c": case "C": case "Shift": hold(); e.preventDefault(); break;
       default: break;
     }
   });
@@ -609,6 +734,8 @@ window.__tetris = {
   refillBag, nextFromBag, ensureQueue,
   // Sub-3
   rotate, KICKS_JLSTZ, KICKS_I,
+  // Sub-4
+  hold, getGhost, NEXT_PREVIEW,
 };
 </script>
 </body>
