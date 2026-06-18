@@ -109,12 +109,13 @@
       <div class="panel" id="panel-score">
         <h2>Score</h2>
         <div class="value" id="score-val">0</div>
+        <div class="stat-row"><span>Best</span><b id="best-val">0</b></div>
         <div class="stat-row"><span>Lines</span><b id="lines-val">0</b></div>
         <div class="stat-row"><span>Level</span><b id="level-val">1</b></div>
       </div>
       <div class="panel" id="panel-stats">
         <h2>Controls</h2>
-        <div class="hint">← → 移動 / ↓ ソフト<br>Space ハードドロップ<br>X・↑ 右回転 / Z 左回転<br>C・Shift ホールド</div>
+        <div class="hint">← → 移動 / ↓ ソフト<br>Space ハードドロップ<br>X・↑ 右回転 / Z 左回転<br>C・Shift ホールド<br>M ミュート <span id="mute-ind"></span></div>
       </div>
     </aside>
   </div>
@@ -200,6 +201,9 @@ const game = {
   lockTimer: 0,        // 接地後のロックダウン経過（ms）
   lockResets: 0,       // move reset の使用回数（infinity 制限）
   gameState: "menu",   // 'menu' | 'playing' | 'paused' | 'gameover'（Sub-6）
+  highScore: 0,        // ハイスコア（localStorage 永続）（Sub-7）
+  particles: [],       // 演出パーティクル（Sub-7）
+  popups: [],          // 「NICE!」等のポップアップ（Sub-7）
   dropTimer: 0,        // 自動落下の累積時間（ms）
   topOut: false,       // スポーン不能（ゲームオーバー条件。判定/遷移は Sub-6）
   time: 0,             // 累積シミュレーション時間（ms）
@@ -451,15 +455,36 @@ function applyClear(cleared) {
   game.backToBack = difficult; // 難消去で継続、それ以外の消去で途切れる
   game.stats.lines += cleared;
   const newLevel = Math.floor(game.stats.lines / LINES_PER_LEVEL) + 1;
-  if (newLevel > game.stats.level) game.stats.level = newLevel;
+  if (newLevel > game.stats.level) {
+    game.stats.level = newLevel;
+    spawnPopup("LEVEL " + newLevel + "!", "#7ac7ff");
+    spawnConfetti(LOGICAL_W / 2, LOGICAL_H * 0.4, 24);
+    sfx.play("levelup");
+  }
 }
 
-/** ピースを盤面に固定し、ライン消去・スコア処理後に次ピースを出す */
+/** 揃っている行のインデックス一覧 */
+function getFullRows() {
+  const rows = [];
+  for (let r = 0; r < ROWS; r++) {
+    if (game.board[r].every((cell) => cell !== null)) rows.push(r);
+  }
+  return rows;
+}
+
+/** ピースを盤面に固定し、ライン消去・スコア・演出処理後に次ピースを出す */
 function lockPiece() {
   const p = game.activePiece;
   if (!p) return;
   for (const [row, col] of pieceCells(p)) setCell(game.board, row, col, p.type);
   game.activePiece = null;
+  const fullRows = getFullRows();
+  if (fullRows.length > 0) {
+    spawnClearEffects(fullRows);
+    sfx.play("clear" + fullRows.length);
+  } else {
+    sfx.play("lock");
+  }
   const cleared = clearLines();
   if (cleared > 0) applyClear(cleared);
   game.lockTimer = 0;
@@ -537,6 +562,142 @@ function rotate(dir) {
 }
 
 /* ---------------------------------------------------------------------
+ * 3d. 演出・効果音・ハイスコア（Sub-7）
+ * ------------------------------------------------------------------- */
+/* ---- WebAudio 効果音（合成音。外部ファイル不要＝file:// 制約回避） ---- */
+const sfx = {
+  ctx: null,
+  muted: false,
+  ensure() {
+    if (this.ctx) { if (this.ctx.state === "suspended") this.ctx.resume(); return; }
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) this.ctx = new AC();
+    } catch (e) { this.ctx = null; }   // 非対応でも無音で継続
+  },
+  /** 単音（周波数・長さ・波形・音量・終端周波数） */
+  blip(freq, dur, type, vol, freqTo) {
+    if (this.muted || !this.ctx) return;
+    try {
+      const t0 = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = type || "sine";
+      osc.frequency.setValueAtTime(freq, t0);
+      if (freqTo) osc.frequency.exponentialRampToValueAtTime(freqTo, t0 + dur);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol || 0.12, t0 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g); g.connect(this.ctx.destination);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
+    } catch (e) { /* 失敗してもゲームは止めない */ }
+  },
+  play(name) {
+    switch (name) {
+      case "move":   this.blip(420, 0.04, "triangle", 0.06); break;
+      case "rotate": this.blip(560, 0.06, "square", 0.05); break;
+      case "hold":   this.blip(500, 0.08, "sine", 0.07, 700); break;
+      case "drop":   this.blip(180, 0.12, "sawtooth", 0.10, 80); break;
+      case "lock":   this.blip(300, 0.05, "sine", 0.06); break;
+      case "clear1": this.chord([523, 659], 0.18); break;
+      case "clear2": this.chord([523, 659, 784], 0.20); break;
+      case "clear3": this.chord([523, 659, 784, 988], 0.22); break;
+      case "clear4": this.chord([659, 784, 988, 1319], 0.30); break; // テトリス
+      case "levelup": this.blip(523, 0.25, "triangle", 0.10, 1047); break;
+      case "gameover": this.blip(440, 0.6, "sawtooth", 0.12, 110); break;
+      default: break;
+    }
+  },
+  chord(freqs, dur) {
+    for (let i = 0; i < freqs.length; i++) {
+      const f = freqs[i];
+      setTimeout(() => this.blip(f, dur, "triangle", 0.09), i * 45);
+    }
+  },
+  toggleMute() {
+    this.muted = !this.muted;
+    saveMuted();
+    updateMuteIndicator();
+  },
+};
+
+/* ---- パーティクル（コンフェッティ）＆ポップアップ ---- */
+const POP_COLORS = ["#ff8fbf", "#ffd36e", "#9be7ff", "#b6f0c2", "#c79bff", "#ffb3c6"];
+function spawnConfetti(x, y, n) {
+  for (let i = 0; i < n; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const spd = 60 + Math.random() * 180;
+    game.particles.push({
+      x, y,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd - 80,
+      life: 700 + Math.random() * 500,
+      age: 0,
+      size: 4 + Math.random() * 5,
+      color: POP_COLORS[(Math.random() * POP_COLORS.length) | 0],
+      rot: Math.random() * Math.PI,
+      vrot: (Math.random() - 0.5) * 12,
+    });
+  }
+}
+function spawnPopup(text, color) {
+  game.popups.push({ text, color: color || "#ff6fa5", age: 0, life: 900, x: LOGICAL_W / 2, y: LOGICAL_H * 0.4 });
+}
+/** dt(ms) でパーティクル/ポップアップを更新（演出は常時アニメ） */
+function updateEffects(dt) {
+  const s = dt / 1000;
+  for (let i = game.particles.length - 1; i >= 0; i--) {
+    const p = game.particles[i];
+    p.age += dt;
+    p.vy += 520 * s;              // 重力
+    p.x += p.vx * s;
+    p.y += p.vy * s;
+    p.rot += p.vrot * s;
+    if (p.age >= p.life) game.particles.splice(i, 1);
+  }
+  for (let i = game.popups.length - 1; i >= 0; i--) {
+    const q = game.popups[i];
+    q.age += dt;
+    if (q.age >= q.life) game.popups.splice(i, 1);
+  }
+}
+function clearEffects() { game.particles.length = 0; game.popups.length = 0; }
+
+/** 消去演出（コンフェッティ＋ライン数ラベル） */
+const CLEAR_LABEL = { 1: "NICE!", 2: "DOUBLE!", 3: "TRIPLE!", 4: "TETRIS!!" };
+function spawnClearEffects(rows) {
+  for (const r of rows) {
+    const vy = r - HIDDEN_ROWS;
+    if (vy < 0) continue;
+    for (let c = 0; c < COLS; c++) {
+      spawnConfetti((c + 0.5) * CELL, (vy + 0.5) * CELL, 3);
+    }
+  }
+  const label = CLEAR_LABEL[rows.length] || "CLEAR!";
+  spawnPopup(label, rows.length === 4 ? "#ff5c97" : "#ff8fbf");
+}
+
+/* ---- ハイスコア（localStorage） ---- */
+const HS_KEY = "my-tetris.highscore";
+const MUTE_KEY = "my-tetris.muted";
+function loadHighScore() {
+  try { game.highScore = parseInt(localStorage.getItem(HS_KEY) || "0", 10) || 0; }
+  catch (e) { game.highScore = 0; }   // localStorage 不可でもセッション内で継続
+}
+function saveHighScore() {
+  if (game.stats.score > game.highScore) {
+    game.highScore = game.stats.score;
+    try { localStorage.setItem(HS_KEY, String(game.highScore)); } catch (e) { /* 無視 */ }
+  }
+}
+function loadMuted() {
+  try { sfx.muted = localStorage.getItem(MUTE_KEY) === "1"; } catch (e) { sfx.muted = false; }
+}
+function saveMuted() {
+  try { localStorage.setItem(MUTE_KEY, sfx.muted ? "1" : "0"); } catch (e) { /* 無視 */ }
+}
+
+/* ---------------------------------------------------------------------
  * 4. 描画
  * ------------------------------------------------------------------- */
 const canvas = document.getElementById("playfield");
@@ -570,6 +731,10 @@ function drawCell(col, visualRow, colorId, alpha) {
   ctx.lineWidth = 2;
   ctx.strokeStyle = pal.edge;
   ctx.stroke();
+  // ぷよっとした光沢ハイライト（上部の白い艶）
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  roundRect(x + pad + 3, y + pad + 3, CELL - pad * 2 - 6, (CELL - pad * 2) * 0.32, 4);
+  ctx.fill();
   ctx.globalAlpha = 1;
 }
 
@@ -645,10 +810,47 @@ function render() {
   drawBoard();
   drawGhost();
   drawActivePiece();
-  // 後続: 演出（Sub-7）
+  drawParticles();
+  drawPopups();
   drawPreviews();
   renderStats();
   drawOverlay();
+}
+
+/* ---- 演出の描画（Sub-7） ---- */
+function drawParticles() {
+  for (const p of game.particles) {
+    const fade = Math.max(0, 1 - p.age / p.life);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.translate(p.x, p.y);
+    ctx.rotate(p.rot);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+    ctx.restore();
+  }
+}
+function drawPopups() {
+  for (const q of game.popups) {
+    const t = q.age / q.life;
+    const fade = t < 0.8 ? 1 : (1 - (t - 0.8) / 0.2);
+    // ぽよんと弾むスケール（イーズアウト気味）
+    const pop = t < 0.3 ? (t / 0.3) : 1;
+    const scale = 0.6 + pop * 0.7 - (t < 0.3 ? 0 : (t - 0.3) * 0.1);
+    const rise = -t * 24;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, fade);
+    ctx.translate(q.x, q.y + rise);
+    ctx.scale(scale, scale);
+    ctx.textAlign = "center";
+    ctx.font = "900 30px system-ui, sans-serif";
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = "rgba(255,255,255,0.95)";
+    ctx.strokeText(q.text, 0, 0);
+    ctx.fillStyle = q.color;
+    ctx.fillText(q.text, 0, 0);
+    ctx.restore();
+  }
 }
 
 /* ---- 状態オーバーレイ（メニュー / ポーズ / ゲームオーバー）（Sub-6） ---- */
@@ -680,24 +882,39 @@ function drawOverlay() {
   } else if (s === "gameover") {
     ctx.fillStyle = accent;
     ctx.font = "800 30px system-ui, sans-serif";
-    ctx.fillText("GAME OVER", cx, cy - 40);
+    ctx.fillText("GAME OVER", cx, cy - 50);
     ctx.fillStyle = text;
     ctx.font = "700 18px system-ui, sans-serif";
-    ctx.fillText("Score " + game.stats.score.toLocaleString(), cx, cy + 2);
+    ctx.fillText("Score " + game.stats.score.toLocaleString(), cx, cy - 12);
+    const isBest = game.stats.score >= game.highScore && game.stats.score > 0;
+    ctx.font = "700 15px system-ui, sans-serif";
+    if (isBest) {
+      ctx.fillStyle = "#ff6fa5";
+      ctx.fillText("🎉 NEW BEST! 🎉", cx, cy + 16);
+    } else {
+      ctx.fillText("Best " + game.highScore.toLocaleString(), cx, cy + 16);
+    }
+    ctx.fillStyle = text;
     ctx.font = "600 15px system-ui, sans-serif";
-    ctx.fillText("Enter / R でリスタート", cx, cy + 38);
+    ctx.fillText("Enter / R でリスタート", cx, cy + 48);
   }
   ctx.restore();
 }
 
 /* ---- スコア/ライン/レベルの DOM 反映（Sub-5） ---- */
 const scoreEl = document.getElementById("score-val");
+const bestEl = document.getElementById("best-val");
 const linesEl = document.getElementById("lines-val");
 const levelEl = document.getElementById("level-val");
+const muteIndEl = document.getElementById("mute-ind");
 function renderStats() {
   if (scoreEl) scoreEl.textContent = game.stats.score.toLocaleString();
+  if (bestEl) bestEl.textContent = game.highScore.toLocaleString();
   if (linesEl) linesEl.textContent = game.stats.lines;
   if (levelEl) levelEl.textContent = game.stats.level;
+}
+function updateMuteIndicator() {
+  if (muteIndEl) muteIndEl.textContent = sfx.muted ? "🔇" : "🔊";
 }
 
 /* ---- サイドパネルのプレビュー描画（Hold / Next） ---- */
@@ -796,7 +1013,7 @@ function update(dt) {
   game.time += dt;
   if (game.gameState !== "playing") return;
   // ゲームオーバー遷移（スポーン不能）
-  if (game.topOut) { game.gameState = "gameover"; return; }
+  if (game.topOut) { game.gameState = "gameover"; saveHighScore(); sfx.play("gameover"); return; }
   if (!game.activePiece) return;
   processAutoShift(dt);
   const base = gravityForLevel(game.stats.level);
@@ -832,6 +1049,7 @@ function frame(ts) {
     accumulator -= STEP_MS;
   }
 
+  updateEffects(elapsed);   // 演出は固定ステップに依らず実時間で滑らかに
   game.frames++;
   render();
   requestAnimationFrame(frame);
@@ -855,6 +1073,10 @@ function boot() {
     setupPreviewCanvas(holdCanvas, holdCtx, 4, 2);
     setupPreviewCanvas(nextCanvas, nextCtx, 4, NEXT_PREVIEW * 3);
   });
+  // ハイスコア・ミュート設定を読み込み
+  loadHighScore();
+  loadMuted();
+  updateMuteIndicator();
   // メニューから開始（Enter でゲーム開始）
   game.gameState = "menu";
   setupControls();
@@ -880,6 +1102,7 @@ function resetGame() {
   game.topOut = false;
   softDropping = false;
   input.left = input.right = false; input.dir = 0; input.dasTimer = 0; input.arrTimer = 0;
+  clearEffects();
   refillBag();
   ensureQueue();
   spawnNext();
@@ -906,6 +1129,9 @@ function setHorizontalDir(dir) {
 function setupControls() {
   window.addEventListener("keydown", (e) => {
     const k = e.key;
+    sfx.ensure();   // ユーザー操作で AudioContext を起動/再開
+    // ミュートはどの状態でも
+    if (k === "m" || k === "M") { sfx.toggleMute(); e.preventDefault(); return; }
     // どの状態でも使うキー
     if (game.gameState === "menu") {
       if (k === "Enter") { startGame(); e.preventDefault(); }
@@ -923,14 +1149,14 @@ function setupControls() {
       return;
     }
     switch (k) {
-      case "ArrowLeft":  input.left = true;  setHorizontalDir(-1); e.preventDefault(); break;
-      case "ArrowRight": input.right = true; setHorizontalDir(1);  e.preventDefault(); break;
+      case "ArrowLeft":  input.left = true;  setHorizontalDir(-1); sfx.play("move"); e.preventDefault(); break;
+      case "ArrowRight": input.right = true; setHorizontalDir(1);  sfx.play("move"); e.preventDefault(); break;
       case "ArrowDown":  softDropping = true; e.preventDefault(); break;
-      case " ":          hardDrop(); e.preventDefault(); break;
+      case " ":          hardDrop(); sfx.play("drop"); e.preventDefault(); break;
       case "ArrowUp":
-      case "x": case "X": rotate(1);  e.preventDefault(); break;
-      case "z": case "Z": rotate(-1); e.preventDefault(); break;
-      case "c": case "C": case "Shift": hold(); e.preventDefault(); break;
+      case "x": case "X": if (rotate(1))  sfx.play("rotate"); e.preventDefault(); break;
+      case "z": case "Z": if (rotate(-1)) sfx.play("rotate"); e.preventDefault(); break;
+      case "c": case "C": case "Shift": hold(); sfx.play("hold"); e.preventDefault(); break;
       default: break;
     }
   });
@@ -971,6 +1197,9 @@ window.__tetris = {
   // Sub-6
   resetGame, startGame, togglePause, processAutoShift, input,
   DAS_MS, ARR_MS,
+  // Sub-7
+  sfx, getFullRows, spawnConfetti, spawnPopup, updateEffects, clearEffects,
+  loadHighScore, saveHighScore, HS_KEY, MUTE_KEY,
 };
 </script>
 </body>
