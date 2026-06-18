@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ぷよっとテトリス</title>
+<style>
+  /* ===== ベーステーマ（パステル / ポップ。最終仕上げは Sub-7） ===== */
+  :root {
+    --bg-1: #fdf2f8;          /* 背景グラデ上 */
+    --bg-2: #eef2ff;          /* 背景グラデ下 */
+    --panel: #ffffff;
+    --panel-border: #ffd6e8;
+    --grid-line: #f0e6f6;
+    --field-bg: #fffafd;
+    --text: #6b5b73;
+    --accent: #ff8fbf;
+    --shadow: rgba(180, 140, 200, 0.25);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    font-family: "Segoe UI", "Hiragino Maru Gothic ProN", "Rounded Mplus 1c", system-ui, sans-serif;
+    color: var(--text);
+    background: linear-gradient(160deg, var(--bg-1), var(--bg-2));
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 16px;
+  }
+  #app {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+  }
+  .title {
+    font-weight: 800;
+    font-size: 22px;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    text-shadow: 0 2px 0 #fff, 0 3px 6px var(--shadow);
+    margin: 0 0 12px;
+    text-align: center;
+  }
+  #playfield-wrap {
+    position: relative;
+    padding: 10px;
+    background: var(--panel);
+    border: 3px solid var(--panel-border);
+    border-radius: 18px;
+    box-shadow: 0 10px 30px var(--shadow);
+  }
+  #playfield {
+    display: block;
+    background: var(--field-bg);
+    border-radius: 12px;
+  }
+  .side {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 150px;
+  }
+  .panel {
+    background: var(--panel);
+    border: 3px solid var(--panel-border);
+    border-radius: 16px;
+    padding: 12px 14px;
+    box-shadow: 0 6px 18px var(--shadow);
+  }
+  .panel h2 {
+    margin: 0 0 6px;
+    font-size: 12px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .panel .value { font-size: 20px; font-weight: 800; }
+  .hint { font-size: 11px; line-height: 1.6; opacity: 0.8; }
+  #unsupported {
+    display: none;
+    padding: 24px;
+    font-size: 16px;
+    font-weight: 700;
+    color: #c0392b;
+  }
+</style>
+</head>
+<body>
+  <div id="app">
+    <div>
+      <h1 class="title">ぷよっと テトリス 🍬</h1>
+      <div id="playfield-wrap">
+        <canvas id="playfield"></canvas>
+        <div id="unsupported">お使いのブラウザーは Canvas に対応していません。</div>
+      </div>
+    </div>
+    <aside class="side">
+      <!-- HOLD / NEXT は Sub-4、SCORE 等は Sub-5 で中身を実装 -->
+      <div class="panel" id="panel-hold"><h2>Hold</h2><div class="value" id="hold-box">—</div></div>
+      <div class="panel" id="panel-next"><h2>Next</h2><div class="value" id="next-box">—</div></div>
+      <div class="panel" id="panel-stats">
+        <h2>Status</h2>
+        <div class="hint">基盤実装（Sub-1）<br>盤面 + ゲームループ稼働中</div>
+      </div>
+    </aside>
+  </div>
+
+<script>
+"use strict";
+/* =========================================================================
+ * ぷよっとテトリス — 単一 HTML 完結 / ES モジュール不使用 / Canvas 2D
+ *
+ * このファイルは Sub-Issue 単位で段階的に拡張される。
+ *   Sub-1 (#2): 基盤・盤面・ゲームループ      ← 本コミット
+ *   Sub-2 (#3): テトリミノ・7-bag・落下/設置
+ *   Sub-3 (#4): SRS 回転（壁蹴り）
+ *   Sub-4 (#5): ホールド・ネクスト・ゴースト
+ *   Sub-5 (#6): ロックダウン・消去・スコア
+ *   Sub-6 (#7): 入力(DAS/ARR)・状態遷移
+ *   Sub-7 (#8): デザイン・演出・効果音
+ * ===================================================================== */
+
+/* ---------------------------------------------------------------------
+ * 1. 定数
+ * ------------------------------------------------------------------- */
+const COLS = 10;            // 列数
+const VISIBLE_ROWS = 20;    // 可視行数
+const BUFFER_ROWS = 2;      // 上部バッファ（スポーン領域。一部不可視）
+const ROWS = VISIBLE_ROWS + BUFFER_ROWS;
+const CELL = 30;            // 1 セルの論理ピクセルサイズ
+const HIDDEN_ROWS = ROWS - VISIBLE_ROWS; // 描画時にスキップする上端行数
+
+/* パステルパレット（色 ID → 塗り色 / 縁色）。Sub-2 以降のミノが参照する */
+const PALETTE = {
+  I: { fill: "#9be7ff", edge: "#62c7ec" },
+  O: { fill: "#ffe69b", edge: "#f0c64a" },
+  T: { fill: "#e6b3ff", edge: "#c07be0" },
+  S: { fill: "#b6f0c2", edge: "#74cf8d" },
+  Z: { fill: "#ffb3c6", edge: "#f07a9b" },
+  J: { fill: "#b3c6ff", edge: "#7a93f0" },
+  L: { fill: "#ffd0a6", edge: "#f0a05a" },
+};
+
+/* ---------------------------------------------------------------------
+ * 2. 盤面データ構造と API
+ *   board[row][col] = null（空） | 色 ID（"I".."L"）
+ *   範囲外アクセスは例外を投げない（get は壁扱い、set は no-op）
+ * ------------------------------------------------------------------- */
+function createBoard() {
+  const b = new Array(ROWS);
+  for (let r = 0; r < ROWS; r++) b[r] = new Array(COLS).fill(null);
+  return b;
+}
+
+/** 範囲内か */
+function inBounds(row, col) {
+  return row >= 0 && row < ROWS && col >= 0 && col < COLS;
+}
+
+/** セル取得。範囲外は "壁" を表す特別値 WALL を返す（衝突判定で利用） */
+const WALL = Symbol("wall");
+function getCell(board, row, col) {
+  if (!inBounds(row, col)) return WALL;
+  return board[row][col];
+}
+
+/** セル設定。範囲外は no-op（例外なし） */
+function setCell(board, row, col, value) {
+  if (!inBounds(row, col)) return false;
+  board[row][col] = value;
+  return true;
+}
+
+/* ---------------------------------------------------------------------
+ * 3. ゲーム状態（後続 Sub-Issue が拡張する中心オブジェクト）
+ * ------------------------------------------------------------------- */
+const game = {
+  board: createBoard(),
+  // activePiece / nextQueue / hold / stats / gameState は後続で追加
+  time: 0,        // 累積シミュレーション時間（ms）
+  frames: 0,      // 描画フレーム数（liveness 確認用）
+};
+
+/* ---------------------------------------------------------------------
+ * 4. 描画
+ * ------------------------------------------------------------------- */
+const canvas = document.getElementById("playfield");
+const unsupported = document.getElementById("unsupported");
+const ctx = canvas ? canvas.getContext("2d") : null;
+
+const LOGICAL_W = COLS * CELL;
+const LOGICAL_H = VISIBLE_ROWS * CELL;
+
+/** devicePixelRatio を考慮して鮮明に描く */
+function setupCanvas() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(LOGICAL_W * dpr);
+  canvas.height = Math.round(LOGICAL_H * dpr);
+  canvas.style.width = LOGICAL_W + "px";
+  canvas.style.height = LOGICAL_H + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+/** 角丸セルを描く（ポップな見た目。Sub-7 で演出強化） */
+function drawCell(col, visualRow, colorId, alpha) {
+  const x = col * CELL;
+  const y = visualRow * CELL;
+  const pad = 1.5;
+  const r = 7;
+  const pal = PALETTE[colorId] || { fill: "#dddddd", edge: "#bbbbbb" };
+  ctx.globalAlpha = alpha == null ? 1 : alpha;
+  roundRect(x + pad, y + pad, CELL - pad * 2, CELL - pad * 2, r);
+  ctx.fillStyle = pal.fill;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = pal.edge;
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function roundRect(x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/** 背景グリッド線 */
+function drawGrid() {
+  ctx.strokeStyle = getCssVar("--grid-line");
+  ctx.lineWidth = 1;
+  for (let c = 0; c <= COLS; c++) {
+    const x = c * CELL + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, LOGICAL_H);
+    ctx.stroke();
+  }
+  for (let r = 0; r <= VISIBLE_ROWS; r++) {
+    const y = r * CELL + 0.5;
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(LOGICAL_W, y);
+    ctx.stroke();
+  }
+}
+
+function getCssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || "#eee";
+}
+
+/** 盤面（固定済みブロック）の描画。バッファ行はスキップ */
+function drawBoard() {
+  for (let r = HIDDEN_ROWS; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      const v = game.board[r][c];
+      if (v) drawCell(c, r - HIDDEN_ROWS, v);
+    }
+  }
+}
+
+/** 1 フレームの描画 */
+function render() {
+  ctx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
+  drawGrid();
+  drawBoard();
+  // 後続: アクティブピース / ゴースト / 演出をここで重ねる
+}
+
+/* ---------------------------------------------------------------------
+ * 5. ゲームループ（固定タイムステップ + アキュムレータ）
+ * ------------------------------------------------------------------- */
+const STEP_MS = 1000 / 60;   // 論理更新の固定刻み
+const MAX_FRAME_MS = 250;    // タブ復帰などの巨大 dt をクランプ
+let lastTs = 0;
+let accumulator = 0;
+
+/** 論理更新（1 ステップ）。後続でピース落下・入力処理を追加 */
+function update(dt) {
+  game.time += dt;
+}
+
+function frame(ts) {
+  if (!lastTs) lastTs = ts;
+  let elapsed = ts - lastTs;
+  lastTs = ts;
+  if (elapsed > MAX_FRAME_MS) elapsed = MAX_FRAME_MS;
+
+  accumulator += elapsed;
+  while (accumulator >= STEP_MS) {
+    update(STEP_MS);
+    accumulator -= STEP_MS;
+  }
+
+  game.frames++;
+  render();
+  requestAnimationFrame(frame);
+}
+
+/* ---------------------------------------------------------------------
+ * 6. 起動
+ * ------------------------------------------------------------------- */
+function boot() {
+  if (!ctx) {
+    if (unsupported) unsupported.style.display = "block";
+    if (canvas) canvas.style.display = "none";
+    return;
+  }
+  setupCanvas();
+  // DPR 変化（ディスプレイ間移動 / ズーム）に追従
+  window.addEventListener("resize", setupCanvas);
+  requestAnimationFrame(frame);
+}
+
+boot();
+
+/* テスト用に内部 API を公開（手動検証・将来の自動テスト用） */
+window.__tetris = {
+  game, createBoard, getCell, setCell, inBounds, WALL,
+  COLS, ROWS, VISIBLE_ROWS, BUFFER_ROWS, CELL, PALETTE,
+};
+</script>
+</body>
+</html>
