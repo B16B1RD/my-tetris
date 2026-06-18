@@ -199,7 +199,7 @@ const game = {
   backToBack: false,   // 直近の難消去（テトリス）が連続しているか
   lockTimer: 0,        // 接地後のロックダウン経過（ms）
   lockResets: 0,       // move reset の使用回数（infinity 制限）
-  // gameState は Sub-6
+  gameState: "menu",   // 'menu' | 'playing' | 'paused' | 'gameover'（Sub-6）
   dropTimer: 0,        // 自動落下の累積時間（ms）
   topOut: false,       // スポーン不能（ゲームオーバー条件。判定/遷移は Sub-6）
   time: 0,             // 累積シミュレーション時間（ms）
@@ -212,6 +212,11 @@ const NEXT_PREVIEW = 5;        // 先読み表示数
 const LOCK_DELAY_MS = 500;     // ロックダウン遅延
 const MAX_LOCK_RESETS = 15;    // move reset 上限（infinity 制限）
 const LINES_PER_LEVEL = 10;    // レベルアップに要するライン数
+const DAS_MS = 150;            // Delayed Auto Shift（長押し開始までの遅延）
+const ARR_MS = 35;             // Auto Repeat Rate（連続移動間隔）
+
+/* 横移動の長押しリピート状態（Sub-6） */
+const input = { left: false, right: false, dir: 0, dasTimer: 0, arrTimer: 0 };
 
 /** レベル別の重力間隔（ms/セル）。ガイドライン準拠の式 */
 function gravityForLevel(level) {
@@ -643,6 +648,46 @@ function render() {
   // 後続: 演出（Sub-7）
   drawPreviews();
   renderStats();
+  drawOverlay();
+}
+
+/* ---- 状態オーバーレイ（メニュー / ポーズ / ゲームオーバー）（Sub-6） ---- */
+function drawOverlay() {
+  const s = game.gameState;
+  if (s === "playing") return;
+  ctx.save();
+  ctx.fillStyle = "rgba(255, 250, 253, 0.82)";
+  ctx.fillRect(0, 0, LOGICAL_W, LOGICAL_H);
+  ctx.textAlign = "center";
+  const cx = LOGICAL_W / 2, cy = LOGICAL_H / 2;
+  const accent = getCssVar("--accent");
+  const text = getCssVar("--text");
+  if (s === "menu") {
+    ctx.fillStyle = accent;
+    ctx.font = "800 30px system-ui, sans-serif";
+    ctx.fillText("ぷよっと", cx, cy - 50);
+    ctx.fillText("テトリス 🍬", cx, cy - 12);
+    ctx.fillStyle = text;
+    ctx.font = "600 16px system-ui, sans-serif";
+    ctx.fillText("Enter で スタート", cx, cy + 36);
+  } else if (s === "paused") {
+    ctx.fillStyle = accent;
+    ctx.font = "800 32px system-ui, sans-serif";
+    ctx.fillText("PAUSE", cx, cy - 6);
+    ctx.fillStyle = text;
+    ctx.font = "600 15px system-ui, sans-serif";
+    ctx.fillText("Esc / P で再開", cx, cy + 28);
+  } else if (s === "gameover") {
+    ctx.fillStyle = accent;
+    ctx.font = "800 30px system-ui, sans-serif";
+    ctx.fillText("GAME OVER", cx, cy - 40);
+    ctx.fillStyle = text;
+    ctx.font = "700 18px system-ui, sans-serif";
+    ctx.fillText("Score " + game.stats.score.toLocaleString(), cx, cy + 2);
+    ctx.font = "600 15px system-ui, sans-serif";
+    ctx.fillText("Enter / R でリスタート", cx, cy + 38);
+  }
+  ctx.restore();
 }
 
 /* ---- スコア/ライン/レベルの DOM 反映（Sub-5） ---- */
@@ -734,10 +779,26 @@ const MAX_FRAME_MS = 250;    // タブ復帰などの巨大 dt をクランプ
 let lastTs = 0;
 let accumulator = 0;
 
+/** 長押しによる横移動リピート（DAS/ARR） */
+function processAutoShift(dt) {
+  if (input.dir === 0) return;
+  input.dasTimer += dt;
+  if (input.dasTimer < DAS_MS) return;
+  input.arrTimer += dt;
+  while (input.arrTimer >= ARR_MS) {
+    input.arrTimer -= ARR_MS;
+    if (!moveHorizontal(input.dir)) break;
+  }
+}
+
 /** 論理更新（1 ステップ）。重力による自動落下 + ロックダウン遅延を処理 */
 function update(dt) {
   game.time += dt;
-  if (game.topOut || !game.activePiece) return;
+  if (game.gameState !== "playing") return;
+  // ゲームオーバー遷移（スポーン不能）
+  if (game.topOut) { game.gameState = "gameover"; return; }
+  if (!game.activePiece) return;
+  processAutoShift(dt);
   const base = gravityForLevel(game.stats.level);
   const interval = softDropping ? base / SOFT_DROP_FACTOR : base;
   game.dropTimer += dt;
@@ -794,32 +855,98 @@ function boot() {
     setupPreviewCanvas(holdCanvas, holdCtx, 4, 2);
     setupPreviewCanvas(nextCanvas, nextCtx, 4, NEXT_PREVIEW * 3);
   });
-  // 初期ピース出現
-  refillBag();
-  ensureQueue();
-  spawnNext();
-  setupTempControls();
+  // メニューから開始（Enter でゲーム開始）
+  game.gameState = "menu";
+  setupControls();
   requestAnimationFrame(frame);
 }
 
-/* 暫定キー操作（Sub-2 検証用。回転は Sub-3、DAS/ARR・ポーズ等は Sub-6 で本実装） */
-function setupTempControls() {
+/* ---------------------------------------------------------------------
+ * 5b. ゲーム状態遷移（Sub-6）
+ * ------------------------------------------------------------------- */
+/** 盤面・統計・キューを初期化 */
+function resetGame() {
+  game.board = createBoard();
+  game.activePiece = null;
+  game.nextQueue = [];
+  game.bag = [];
+  game.holdPiece = null;
+  game.holdUsed = false;
+  game.stats = { score: 0, lines: 0, level: 1 };
+  game.backToBack = false;
+  game.lockTimer = 0;
+  game.lockResets = 0;
+  game.dropTimer = 0;
+  game.topOut = false;
+  softDropping = false;
+  input.left = input.right = false; input.dir = 0; input.dasTimer = 0; input.arrTimer = 0;
+  refillBag();
+  ensureQueue();
+  spawnNext();
+}
+function startGame() {
+  resetGame();
+  game.gameState = "playing";
+}
+function togglePause() {
+  if (game.gameState === "playing") game.gameState = "paused";
+  else if (game.gameState === "paused") game.gameState = "playing";
+}
+
+/* ---------------------------------------------------------------------
+ * 5c. 入力（DAS/ARR・状態別キーハンドリング）（Sub-6）
+ * ------------------------------------------------------------------- */
+function setHorizontalDir(dir) {
+  // 押下方向へ即時 1 マス移動し、DAS/ARR タイマーを起動
+  input.dir = dir;
+  input.dasTimer = 0;
+  input.arrTimer = 0;
+  moveHorizontal(dir);
+}
+function setupControls() {
   window.addEventListener("keydown", (e) => {
-    if (game.topOut || !game.activePiece) return;
-    switch (e.key) {
-      case "ArrowLeft":  moveHorizontal(-1); e.preventDefault(); break;
-      case "ArrowRight": moveHorizontal(1);  e.preventDefault(); break;
+    const k = e.key;
+    // どの状態でも使うキー
+    if (game.gameState === "menu") {
+      if (k === "Enter") { startGame(); e.preventDefault(); }
+      return;
+    }
+    if (game.gameState === "gameover") {
+      if (k === "Enter" || k === "r" || k === "R") { startGame(); e.preventDefault(); }
+      return;
+    }
+    if (k === "Escape" || k === "p" || k === "P") { togglePause(); e.preventDefault(); return; }
+    if (game.gameState !== "playing") return;
+    if (e.repeat) {
+      // OS キーリピートは無視（DAS/ARR は自前で処理）。ただしソフトドロップは継続でよい
+      if (k !== "ArrowDown") e.preventDefault();
+      return;
+    }
+    switch (k) {
+      case "ArrowLeft":  input.left = true;  setHorizontalDir(-1); e.preventDefault(); break;
+      case "ArrowRight": input.right = true; setHorizontalDir(1);  e.preventDefault(); break;
       case "ArrowDown":  softDropping = true; e.preventDefault(); break;
       case " ":          hardDrop(); e.preventDefault(); break;
       case "ArrowUp":
-      case "x": case "X": rotate(1);  e.preventDefault(); break;   // CW
-      case "z": case "Z": rotate(-1); e.preventDefault(); break;   // CCW
+      case "x": case "X": rotate(1);  e.preventDefault(); break;
+      case "z": case "Z": rotate(-1); e.preventDefault(); break;
       case "c": case "C": case "Shift": hold(); e.preventDefault(); break;
       default: break;
     }
   });
   window.addEventListener("keyup", (e) => {
-    if (e.key === "ArrowDown") softDropping = false;
+    const k = e.key;
+    if (k === "ArrowDown") softDropping = false;
+    if (k === "ArrowLeft") {
+      input.left = false;
+      input.dir = input.right ? 1 : 0;        // 反対キーが押下中ならそちらへ
+      input.dasTimer = 0; input.arrTimer = 0;
+    }
+    if (k === "ArrowRight") {
+      input.right = false;
+      input.dir = input.left ? -1 : 0;
+      input.dasTimer = 0; input.arrTimer = 0;
+    }
   });
 }
 
@@ -841,6 +968,9 @@ window.__tetris = {
   // Sub-5
   clearLines, applyClear, isGrounded, gravityForLevel, update,
   LOCK_DELAY_MS, MAX_LOCK_RESETS, LINES_PER_LEVEL,
+  // Sub-6
+  resetGame, startGame, togglePause, processAutoShift, input,
+  DAS_MS, ARR_MS,
 };
 </script>
 </body>
