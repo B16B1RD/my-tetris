@@ -364,6 +364,61 @@ function hardDrop() {
 }
 
 /* ---------------------------------------------------------------------
+ * 3c. SRS 回転システム（Sub-3）
+ *   回転状態 0/R/2/L を 0/1/2/3 で管理。CW/CCW 回転後の形状に対し、
+ *   SRS 公式の壁蹴りテーブル（JLSTZ / I 別）の 5 候補を順に試し、
+ *   最初に衝突しない位置を採用する。全候補が衝突なら回転失敗（状態維持）。
+ *
+ *   テーブルは標準表記 (dx, dy)（dy 正 = 上）。本盤面は row が下向きのため
+ *   候補位置は { x: x + dx, y: y - dy } で適用する。
+ * ------------------------------------------------------------------- */
+// 遷移キー "from>to"（状態 0=spawn,1=R,2=2,3=L）
+const KICKS_JLSTZ = {
+  "0>1": [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+  "1>0": [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+  "1>2": [[0,0],[1,0],[1,-1],[0,2],[1,2]],
+  "2>1": [[0,0],[-1,0],[-1,1],[0,-2],[-1,-2]],
+  "2>3": [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+  "3>2": [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+  "3>0": [[0,0],[-1,0],[-1,-1],[0,2],[-1,2]],
+  "0>3": [[0,0],[1,0],[1,1],[0,-2],[1,-2]],
+};
+const KICKS_I = {
+  "0>1": [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
+  "1>0": [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
+  "1>2": [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
+  "2>1": [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
+  "2>3": [[0,0],[2,0],[-1,0],[2,1],[-1,-2]],
+  "3>2": [[0,0],[-2,0],[1,0],[-2,-1],[1,2]],
+  "3>0": [[0,0],[1,0],[-2,0],[1,-2],[-2,1]],
+  "0>3": [[0,0],[-1,0],[2,0],[-1,2],[2,-1]],
+};
+
+/** 回転を試みる。dir = +1(CW) / -1(CCW)。成功で true */
+function rotate(dir) {
+  const p = game.activePiece;
+  if (!p) return false;
+  if (p.type === "O") {
+    // O は形状不変。状態だけ進めて占有セルは変えない
+    game.activePiece = { ...p, rotation: (p.rotation + dir + 4) % 4 };
+    return true;
+  }
+  const from = p.rotation;
+  const to = (from + dir + 4) % 4;
+  const table = (p.type === "I") ? KICKS_I : KICKS_JLSTZ;
+  const tests = table[from + ">" + to];
+  if (!tests) return false;
+  for (const [dx, dy] of tests) {
+    const cand = { ...p, rotation: to, x: p.x + dx, y: p.y - dy };
+    if (!collides(game.board, cand)) {
+      game.activePiece = cand;
+      return true;
+    }
+  }
+  return false;  // 全候補衝突 → 回転失敗（状態維持）
+}
+
+/* ---------------------------------------------------------------------
  * 4. 描画
  * ------------------------------------------------------------------- */
 const canvas = document.getElementById("playfield");
@@ -530,6 +585,9 @@ function setupTempControls() {
       case "ArrowRight": moveHorizontal(1);  e.preventDefault(); break;
       case "ArrowDown":  softDropping = true; softDropStep(); e.preventDefault(); break;
       case " ":          hardDrop(); e.preventDefault(); break;
+      case "ArrowUp":
+      case "x": case "X": rotate(1);  e.preventDefault(); break;   // CW
+      case "z": case "Z": rotate(-1); e.preventDefault(); break;   // CCW
       default: break;
     }
   });
@@ -549,6 +607,8 @@ window.__tetris = {
   pieceCells, collides, makePiece, spawnNext,
   moveHorizontal, stepDown, lockPiece, hardDrop, softDropStep,
   refillBag, nextFromBag, ensureQueue,
+  // Sub-3
+  rotate, KICKS_JLSTZ, KICKS_I,
 };
 </script>
 </body>
