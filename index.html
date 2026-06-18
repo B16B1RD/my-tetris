@@ -181,10 +181,187 @@ function setCell(board, row, col, value) {
  * ------------------------------------------------------------------- */
 const game = {
   board: createBoard(),
-  // activePiece / nextQueue / hold / stats / gameState は後続で追加
-  time: 0,        // 累積シミュレーション時間（ms）
-  frames: 0,      // 描画フレーム数（liveness 確認用）
+  activePiece: null,   // { type, rotation, x, y }（x,y = バウンディングボックス左上）
+  nextQueue: [],       // 7-bag 由来の先読みキュー
+  bag: [],             // 現在の bag 残り
+  // hold / stats / gameState は後続で追加
+  dropTimer: 0,        // 自動落下の累積時間（ms）
+  topOut: false,       // スポーン不能（ゲームオーバー条件。判定/遷移は Sub-6）
+  time: 0,             // 累積シミュレーション時間（ms）
+  frames: 0,           // 描画フレーム数（liveness 確認用）
 };
+
+/* 自動落下間隔（ms/セル）。レベル連動は Sub-5 で置換 */
+const DROP_INTERVAL_MS = 800;
+const SOFT_DROP_FACTOR = 12;   // ソフトドロップ時の加速倍率
+let softDropping = false;
+const NEXT_PREVIEW = 5;        // 先読み表示数（表示は Sub-4）
+
+/* ---------------------------------------------------------------------
+ * 3b. テトリミノ定義（Sub-2）
+ *   各ミノを基準形（rotation state 0）の行列で定義し、CW 90°回転で
+ *   4 状態（0/R/2/L）を生成する。SRS 標準の基準形を用いるため、
+ *   Sub-3 の壁蹴りテーブルがそのまま適用できる。
+ *     I: 4x4 / O: 2x2（回転不変） / その他: 3x3
+ * ------------------------------------------------------------------- */
+const BASE_SHAPES = {
+  I: [[0,0,0,0],
+      [1,1,1,1],
+      [0,0,0,0],
+      [0,0,0,0]],
+  O: [[1,1],
+      [1,1]],
+  T: [[0,1,0],
+      [1,1,1],
+      [0,0,0]],
+  S: [[0,1,1],
+      [1,1,0],
+      [0,0,0]],
+  Z: [[1,1,0],
+      [0,1,1],
+      [0,0,0]],
+  J: [[1,0,0],
+      [1,1,1],
+      [0,0,0]],
+  L: [[0,0,1],
+      [1,1,1],
+      [0,0,0]],
+};
+const PIECE_TYPES = ["I", "O", "T", "S", "Z", "J", "L"];
+
+/** 行列を時計回りに 90°回転 */
+function rotateMatrixCW(m) {
+  const n = m.length, w = m[0].length;
+  const out = [];
+  for (let c = 0; c < w; c++) {
+    const row = [];
+    for (let r = n - 1; r >= 0; r--) row.push(m[r][c]);
+    out.push(row);
+  }
+  return out;
+}
+
+/** 各ミノの 4 回転状態（cell 座標 [r,c] の配列）を事前計算 */
+const PIECE_STATES = {};
+const PIECE_BBOX = {};   // 各ミノのバウンディングボックス幅（spawn 配置に使用）
+(function buildPieceStates() {
+  for (const type of PIECE_TYPES) {
+    let m = BASE_SHAPES[type];
+    PIECE_BBOX[type] = m[0].length;
+    const states = [];
+    // O は回転不変だが 4 状態を同一で持たせ、状態管理を統一する
+    const count = (type === "O") ? 1 : 4;
+    for (let i = 0; i < 4; i++) {
+      const useIndex = Math.min(i, count - 1);
+      // i 回 CW 回転した行列から cell 座標を抽出
+      let rm = BASE_SHAPES[type];
+      for (let k = 0; k < useIndex; k++) rm = rotateMatrixCW(rm);
+      const cells = [];
+      for (let r = 0; r < rm.length; r++)
+        for (let c = 0; c < rm[r].length; c++)
+          if (rm[r][c]) cells.push([r, c]);
+      states.push(cells);
+    }
+    PIECE_STATES[type] = states;
+  }
+})();
+
+/** あるピース状態の占有セル（盤面絶対座標 [row,col]）を返す */
+function pieceCells(piece) {
+  const cells = PIECE_STATES[piece.type][piece.rotation];
+  const out = [];
+  for (const [r, c] of cells) out.push([piece.y + r, piece.x + c]);
+  return out;
+}
+
+/** ピースが盤面と衝突するか（壁・床・既存ブロック） */
+function collides(board, piece) {
+  for (const [row, col] of pieceCells(piece)) {
+    const cell = getCell(board, row, col);
+    if (cell === WALL || cell !== null) return true;
+  }
+  return false;
+}
+
+/* ---- 7-bag ランダマイザ ---- */
+function refillBag() {
+  const b = PIECE_TYPES.slice();
+  // Fisher–Yates シャッフル
+  for (let i = b.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [b[i], b[j]] = [b[j], b[i]];
+  }
+  game.bag = b;
+}
+function nextFromBag() {
+  if (game.bag.length === 0) refillBag();
+  return game.bag.shift();
+}
+function ensureQueue() {
+  while (game.nextQueue.length <= NEXT_PREVIEW) game.nextQueue.push(nextFromBag());
+}
+
+/** 指定 type のスポーン状態ピースを生成（盤面上部・中央寄せ） */
+function makePiece(type) {
+  const w = PIECE_BBOX[type];
+  // 中央寄せ: 3/4 幅は x=3、O(2幅) は x=4
+  const x = (w === 2) ? 4 : 3;
+  // 占有最小行が可視上端(HIDDEN_ROWS)に来るよう y を決める
+  let minRow = Infinity;
+  for (const [r] of PIECE_STATES[type][0]) minRow = Math.min(minRow, r);
+  const y = HIDDEN_ROWS - minRow;
+  return { type, rotation: 0, x, y };
+}
+
+/** 次のピースを出現させる。衝突する場合は topOut フラグを立てる */
+function spawnNext() {
+  ensureQueue();
+  const type = game.nextQueue.shift();
+  ensureQueue();
+  const piece = makePiece(type);
+  game.activePiece = piece;
+  game.dropTimer = 0;
+  if (collides(game.board, piece)) {
+    game.topOut = true;   // ゲームオーバー条件（遷移は Sub-6）
+  }
+}
+
+/* ---- ピース操作 ---- */
+/** dx 方向に水平移動（成功で true） */
+function moveHorizontal(dx) {
+  const p = game.activePiece;
+  if (!p) return false;
+  const moved = { ...p, x: p.x + dx };
+  if (!collides(game.board, moved)) { game.activePiece = moved; return true; }
+  return false;
+}
+/** 1 セル落下を試みる（成功で true、できなければ false=着地） */
+function stepDown() {
+  const p = game.activePiece;
+  if (!p) return false;
+  const moved = { ...p, y: p.y + 1 };
+  if (!collides(game.board, moved)) { game.activePiece = moved; return true; }
+  return false;
+}
+/** ピースを盤面に固定し次ピースを出す */
+function lockPiece() {
+  const p = game.activePiece;
+  if (!p) return;
+  for (const [row, col] of pieceCells(p)) setCell(game.board, row, col, p.type);
+  game.activePiece = null;
+  spawnNext();
+  // ライン消去・スコアは Sub-5 で lock 後処理として追加
+}
+/** ソフトドロップ 1 セル（着地なら lock） */
+function softDropStep() {
+  if (!stepDown()) lockPiece();
+}
+/** ハードドロップ: 最下到達まで即落下して lock */
+function hardDrop() {
+  if (!game.activePiece) return;
+  while (stepDown()) { /* 落下し続ける */ }
+  lockPiece();
+}
 
 /* ---------------------------------------------------------------------
  * 4. 描画
@@ -268,12 +445,23 @@ function drawBoard() {
   }
 }
 
+/** アクティブピースの描画（バッファ行はスキップ） */
+function drawActivePiece() {
+  const p = game.activePiece;
+  if (!p) return;
+  for (const [row, col] of pieceCells(p)) {
+    if (row >= HIDDEN_ROWS) drawCell(col, row - HIDDEN_ROWS, p.type);
+  }
+}
+
 /** 1 フレームの描画 */
 function render() {
   ctx.clearRect(0, 0, LOGICAL_W, LOGICAL_H);
   drawGrid();
   drawBoard();
-  // 後続: アクティブピース / ゴースト / 演出をここで重ねる
+  // 後続: ゴースト（Sub-4）をここで重ねる
+  drawActivePiece();
+  // 後続: 演出（Sub-7）
 }
 
 /* ---------------------------------------------------------------------
@@ -284,9 +472,16 @@ const MAX_FRAME_MS = 250;    // タブ復帰などの巨大 dt をクランプ
 let lastTs = 0;
 let accumulator = 0;
 
-/** 論理更新（1 ステップ）。後続でピース落下・入力処理を追加 */
+/** 論理更新（1 ステップ）。重力による自動落下を処理 */
 function update(dt) {
   game.time += dt;
+  if (game.topOut || !game.activePiece) return;
+  const interval = softDropping ? DROP_INTERVAL_MS / SOFT_DROP_FACTOR : DROP_INTERVAL_MS;
+  game.dropTimer += dt;
+  while (game.dropTimer >= interval) {
+    game.dropTimer -= interval;
+    if (!stepDown()) { lockPiece(); break; }
+  }
 }
 
 function frame(ts) {
@@ -318,7 +513,29 @@ function boot() {
   setupCanvas();
   // DPR 変化（ディスプレイ間移動 / ズーム）に追従
   window.addEventListener("resize", setupCanvas);
+  // 初期ピース出現
+  refillBag();
+  ensureQueue();
+  spawnNext();
+  setupTempControls();
   requestAnimationFrame(frame);
+}
+
+/* 暫定キー操作（Sub-2 検証用。回転は Sub-3、DAS/ARR・ポーズ等は Sub-6 で本実装） */
+function setupTempControls() {
+  window.addEventListener("keydown", (e) => {
+    if (game.topOut || !game.activePiece) return;
+    switch (e.key) {
+      case "ArrowLeft":  moveHorizontal(-1); e.preventDefault(); break;
+      case "ArrowRight": moveHorizontal(1);  e.preventDefault(); break;
+      case "ArrowDown":  softDropping = true; softDropStep(); e.preventDefault(); break;
+      case " ":          hardDrop(); e.preventDefault(); break;
+      default: break;
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.key === "ArrowDown") softDropping = false;
+  });
 }
 
 boot();
@@ -326,7 +543,12 @@ boot();
 /* テスト用に内部 API を公開（手動検証・将来の自動テスト用） */
 window.__tetris = {
   game, createBoard, getCell, setCell, inBounds, WALL,
-  COLS, ROWS, VISIBLE_ROWS, BUFFER_ROWS, CELL, PALETTE,
+  COLS, ROWS, VISIBLE_ROWS, BUFFER_ROWS, HIDDEN_ROWS, CELL, PALETTE,
+  // Sub-2
+  PIECE_TYPES, PIECE_STATES, PIECE_BBOX, BASE_SHAPES,
+  pieceCells, collides, makePiece, spawnNext,
+  moveHorizontal, stepDown, lockPiece, hardDrop, softDropStep,
+  refillBag, nextFromBag, ensureQueue,
 };
 </script>
 </body>
