@@ -1,0 +1,18 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Logs / temp
+*.log
+tmp/
+
+# Node (将来ツールを導入した場合)
+node_modules/
+dist/
+
+# Secrets
+.env
+.env.keys
