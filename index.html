@@ -1100,8 +1100,7 @@ function resetGame() {
   game.lockResets = 0;
   game.dropTimer = 0;
   game.topOut = false;
-  softDropping = false;
-  input.left = input.right = false; input.dir = 0; input.dasTimer = 0; input.arrTimer = 0;
+  clearHeldInputs();
   clearEffects();
   refillBag();
   ensureQueue();
@@ -1126,7 +1125,15 @@ function setHorizontalDir(dir) {
   input.arrTimer = 0;
   moveHorizontal(dir);
 }
+function clearHeldInputs() {
+  softDropping = false;
+  input.left = input.right = false;
+  input.dir = 0;
+  input.dasTimer = input.arrTimer = 0;
+}
 function setupControls() {
+  // フォーカスを失うと keyup が届かないため、押下状態を持ち越さない
+  window.addEventListener("blur", clearHeldInputs);
   window.addEventListener("keydown", (e) => {
     const k = e.key;
     sfx.ensure();   // ユーザー操作で AudioContext を起動/再開
